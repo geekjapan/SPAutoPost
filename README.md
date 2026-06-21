@@ -1,6 +1,10 @@
 # SPAutoPost
 
-SPAutoPost は GitHub 駆動で管理するプロジェクトです。
+SPAutoPost は、社内 SharePoint サイトのお知らせ掲示板に、セキュリティ対策情報、脆弱性情報、その対応方法を掲載するための自動化プログラムです。
+
+当面は、脆弱性情報の収集、対策方針の整理、掲示板向け文章の生成、SharePoint への下書きまたは投稿までをこのプログラム内に実装します。将来的には、クローラーや情報整理を別プログラムへ分離し、SPAutoPost は正規化済み情報を安全に SharePoint へ掲載する投稿基盤に責務を絞ることを想定します。
+
+このリポジトリは GitHub 駆動で管理します。
 
 このリポジトリでは、GitHub に記載された Spec / Milestone / Issue をプロジェクトの正本として扱います。Claude Code / Codex などの実装エージェントは、Milestone に沿って Issue を OpenSpec change に落とし込み、実装・検証・Pull Request 作成を行います。
 
@@ -16,8 +20,12 @@ SPAutoPost は GitHub 駆動で管理するプロジェクトです。
 ## 主要ドキュメント
 
 - [AGENTS.md](./AGENTS.md): Claude Code / Codex など実装エージェント向けの作業ルール
+- [docs/product-brief.md](./docs/product-brief.md): プロダクトの目的、対象、成功条件
+- [docs/roadmap.md](./docs/roadmap.md): 推奨 Milestone と段階的ロードマップ
+- [docs/features.md](./docs/features.md): 機能分解
 - [docs/project-rules.md](./docs/project-rules.md): プロジェクト全体の運用ルール
 - [docs/openspec-workflow.md](./docs/openspec-workflow.md): Issue から OpenSpec change へ落とし込む手順
+- [docs/specs/initial-system.md](./docs/specs/initial-system.md): 初期システム仕様
 - [docs/specs/README.md](./docs/specs/README.md): Spec の管理方針
 - [docs/decisions/README.md](./docs/decisions/README.md): 設計判断記録の管理方針
 
