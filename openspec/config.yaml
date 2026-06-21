@@ -1,0 +1,16 @@
+schema: spec-driven
+
+context: |
+  言語：日本語
+  すべての成果物は日本語で作成してください。
+  ただし、API・REST・GraphQL などの技術用語、コード例、ファイルパスは英語のままにしてください。
+
+# Per-artifact rules (optional)
+# Add custom rules for specific artifacts.
+# Example:
+#   rules:
+#     proposal:
+#       - Keep proposals under 500 words
+#       - Always include a "Non-goals" section
+#     tasks:
+#       - Break tasks into chunks of max 2 hours
