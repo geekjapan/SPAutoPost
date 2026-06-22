@@ -6,31 +6,38 @@ Accepted
 
 ## Context
 
-SPAutoPost の MVP では、まず手動入力またはサンプル脆弱性情報から、正規化、AI 原稿生成、人間レビュー、SharePoint 下書きまたはテスト投稿、監査ログ記録までの縦串を通す必要があります。
+SPAutoPost の MVP では、定期的に脆弱性情報を収集し、記事を作成し、管理者が確認・修正・確定した後、SharePoint Site Page / News として投稿する運用を目指します。
 
-この段階では、Web UI や常駐サービスよりも、実装速度、検証容易性、dry-run、監査可能性を優先します。
+この運用では、定期収集や投稿処理を人間ユーザーの端末に依存させるべきではありません。常時起動または定期起動できる Azure 上の container runtime を運用コアに据える必要があります。
+
+一方で、初期実装と検証では CLI / Batch command が有効です。CLI は開発、dry-run、手動再実行、障害時の補助操作、Container Apps Jobs の command entrypoint として残します。
 
 ## Decision
 
-MVP の実装言語は Python とします。
+MVP の core language は Python とします。
 
-MVP の実行形態は CLI / Batch application とします。
+MVP の最小実装単位は Python CLI / Batch command とします。
 
-画面が必要になった段階で、TypeScript / Node.js による frontend または API layer を検討します。
+ただし、運用コアはユーザー端末ではなく Azure Container Apps / Azure Container Apps Jobs を主候補とします。
+
+管理者が記事を確認・修正・確定する UI/API は早期に追加する方針とします。管理画面が必要になった段階で TypeScript / Node.js を採用します。
 
 ## Rationale
 
-- Python は、脆弱性情報の収集、正規化、YAML/JSON、SQLite、HTTP client、LLM API 連携と相性がよい。
+- Python は、脆弱性情報の収集、正規化、YAML/JSON、HTTP client、LLM API 連携と相性がよい。
 - CLI / Batch は MVP の縦串検証に向いている。
-- Web UI、API server、常駐 worker を MVP に含めると、投稿基盤としての本質的な検証より実装面が重くなる。
-- 将来、画面が必要になった場合でも、Python core を維持しつつ TypeScript / Node.js を追加できる。
+- 定期収集や投稿処理をユーザー端末に依存させると、可用性、監査性、認証情報管理、再現性の面で弱い。
+- Azure Container Apps / Jobs を使うと、常時稼働 API と定期 job を同一 Azure 環境上で扱いやすい。
+- 将来、管理画面が必要になった場合でも、Python core を維持しつつ TypeScript / Node.js の UI/API layer を追加できる。
 
 ## Consequences
 
-- M0 / M1 の実装 Issue は Python CLI / Batch 前提で進める。
+- M0 / M1 の実装 Issue は Python core + CLI command 前提で進める。
+- ただし、CLI は最終運用形ではなく Azure Jobs の entrypoint として設計する。
+- 定期収集、記事生成、投稿待ち管理は Azure hosted runtime へ寄せる。
+- Web UI / API server は MVP 初期の必須ではないが、早期追加対象とする。
 - `docs/specs/architecture.md` を MVP アーキテクチャの正本として扱う。
-- Web UI / API server / scheduler は MVP 対象外とする。
-- TypeScript / Node.js は将来の UI または API layer 候補として残す。
+- TypeScript / Node.js は将来の Admin UI / API layer 候補として残す。
 
 ## Related
 
@@ -40,3 +47,5 @@ MVP の実行形態は CLI / Batch application とします。
 - Issue: #7
 - Issue: #9
 - Issue: #10
+- Issue: #21
+- Issue: #23
