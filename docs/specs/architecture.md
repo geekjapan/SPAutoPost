@@ -2,7 +2,7 @@
 
 ## Status
 
-Proposed
+Accepted for MVP runtime decisions. Proposed for storage, authentication, and provider implementation details.
 
 ## Purpose
 
@@ -14,9 +14,11 @@ MVP では、次の構成を採用します。
 
 - Language: Python
 - Runtime: CLI / Batch application
-- Frontend: MVP 対象外。画面が必要になった段階で TypeScript / Node.js を検討する
-- Storage: SQLite + YAML/JSON fixtures を第一候補とする
-- Publishing: dry-run / test posting / draft posting を基本とし、本番自動公開は MVP 対象外
+- Frontend: MVP 対象外。画面が必要になった段階で TypeScript / Node.js を採用する
+- Serverization: 早めにサーバへ載せ、管理画面化できるようにする。ただし MVP の初期実装は CLI / Batch を優先する
+- Storage: SQLite + YAML/JSON fixtures を第一候補とする。最終確定は #3 / #23 で扱う
+- SharePoint Publishing: SharePoint Site Page / News article 形式を採用する
+- Publishing Safety: dry-run / test posting / draft posting を基本とし、本番自動公開は MVP 対象外
 - LLM: mock provider を必須とし、production provider は provider interface 経由で追加する
 - Scheduler: MVP 対象外。手動実行または簡易 batch 実行を優先する
 - External Collector: MVP では import schema と境界のみを定義する
@@ -45,7 +47,7 @@ publish-draft
 audit-export
 ```
 
-MVP では Web UI、API server、常駐 worker、複雑な scheduler は対象外とします。
+MVP では Web UI、API server、常駐 worker、複雑な scheduler は対象外とします。ただし、後続でサーバ化しやすいよう、core logic は CLI に閉じ込めず、module / package として分離します。
 
 ## High-Level Architecture
 
@@ -62,9 +64,9 @@ SPAutoPost CLI / Batch
   │   └─ Generic LLM API Provider future
   ├─ Draft Validation
   ├─ Review / Approval State
-  ├─ SharePoint Publisher
+  ├─ SharePoint Site Page / News Publisher
   ├─ Storage
-  │   ├─ SQLite
+  │   ├─ SQLite proposed
   │   └─ YAML/JSON fixtures
   └─ Audit Logger
 ```
@@ -81,7 +83,7 @@ Manual Advisory YAML/JSON
   -> DraftPost
   -> Draft Validation
   -> Human Review / Approval
-  -> SharePoint Publication dry-run or draft
+  -> SharePoint Site Page / News Draft or Test Posting
   -> AuditEvent
 ```
 
@@ -132,15 +134,16 @@ Manual Advisory YAML/JSON
 ### Review / Approval State
 
 - DraftPost の status を管理する
-- MVP では CLI と SQLite による状態管理でよい
+- MVP では CLI と SQLite proposed による状態管理でよい
 - approved でない DraftPost は publish できない
 
-### SharePoint Publisher
+### SharePoint Site Page / News Publisher
 
+- SharePoint Site Page / News article 形式で投稿 payload を作成する
 - dry-run preview を提供する
 - test site / draft posting を扱う
 - idempotency_key で重複投稿を防ぐ
-- SharePoint List item / Site Page の最終選定は #2 で決定する
+- List item 投稿は MVP の主経路ではない
 
 ### Storage
 
@@ -174,7 +177,7 @@ External Sources
   -> SPAutoPost controlled processing
   -> LLM Provider
   -> Human Reviewer
-  -> Microsoft Graph / SharePoint
+  -> Microsoft Graph / SharePoint Site Page / News
 ```
 
 注意する境界:
@@ -214,16 +217,19 @@ TypeScript / Node.js Web UI
 ```text
 External Collector
   -> Normalized Advisory Import
-      -> SPAutoPost CLI / Worker
+      -> SPAutoPost CLI / Worker / API
           -> Draft / Review / SharePoint Publish
 ```
 
 ## Open Questions
 
-- SharePoint お知らせ掲示板の実体は List item か Site Page / News か。
-- MVP の SQLite schema をどこまで固定するか。
-- Azure OpenAI / Foundry provider を M1 に含めるか、M3 まで待つか。
-- review / approve 操作を CLI command とするか、ファイル編集 workflow とするか。
+MVP 実装前または M1 途中で決める必要がある未決事項:
+
+- MVP の SQLite schema をどこまで固定するか
+- Microsoft Graph 認証方式を delegated / application / managed identity のどれにするか
+- Azure OpenAI / Foundry provider を M1 に含めるか、M3 まで待つか
+- review / approve 操作を CLI command とするか、ファイル編集 workflow とするか
+- 管理画面化の開始 Milestone を M2/M3/M4 のどこに置くか
 
 ## Related Issues
 
