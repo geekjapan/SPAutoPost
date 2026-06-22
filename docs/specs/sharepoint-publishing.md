@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted for MVP publishing mode. Proposed for authentication and production publish details.
+Accepted for MVP publishing mode and M1 dedicated SharePoint publishing.
 
 ## Purpose
 
@@ -13,6 +13,10 @@ Accepted for MVP publishing mode. Proposed for authentication and production pub
 MVP の SharePoint 投稿対象は、SharePoint Site Page / News article 形式とします。
 
 SPAutoPost は、脆弱性情報やセキュリティ対策情報を記事・ニュース形式で詳細に掲載するため、MVP では SharePoint List item ではなく Site Page / News を主経路とします。
+
+M1 では、専用 SharePoint site への投稿を許可します。管理者が Admin UI/API で記事を確認・修正・確定した後、SharePoint Site Page / News として投稿できます。
+
+人間確認なしの自動投稿は M1 対象外です。
 
 ## Scope
 
@@ -27,11 +31,11 @@ SPAutoPost は、脆弱性情報やセキュリティ対策情報を記事・ニ
 
 非対象:
 
-- 本番 tenant の Secret 登録
 - 複数 SharePoint site への同時投稿
 - 複雑な page layout / web parts 設計
 - 社外公開サイトへの投稿
 - SharePoint List item を主経路とする投稿
+- 人間確認なしの自動投稿
 
 ## Publishing Mode
 
@@ -72,8 +76,10 @@ sharepoint:
   tenant_id: env:SPAUTOPOST_TENANT_ID
   site_id: env:SPAUTOPOST_SHAREPOINT_SITE_ID
   page_library_id: env:SPAUTOPOST_SHAREPOINT_PAGE_LIBRARY_ID
+  dedicated_site: true
   default_draft: true
-  allow_publish: false
+  allow_publish: true
+  require_approval: true
   idempotency_scope: site-and-page-library
 ```
 
@@ -84,18 +90,19 @@ Microsoft Graph 権限は最小権限とします。
 設計方針:
 
 - 読み取りだけで足りる source 確認と、投稿用権限を分離する。
-- 本番運用では専用 app registration または managed identity を使う。
+- Azure hosted runtime では user-assigned managed identity を第一候補とする。
+- ローカル PoC では delegated permission を許容する。
 - 広すぎる権限は避け、投稿対象 site / page library に限定できる方式を優先する。
-- delegated permission と application permission のどちらを使うかは MVP 実装前に確定する。
 
 ## Draft and Publish Policy
 
-MVP では、直接公開を既定値にしません。
+M1 では、専用 SharePoint site に限り、管理者確定後の投稿を許可します。
 
-- default: draft または test posting
-- production publish: explicit approval required
-- approved でない DraftPost は publish 不可
-- dry-run では Graph API による作成・更新を行わない
+- generated DraftPost はそのまま投稿しない。
+- Admin UI/API で管理者が確認・修正・確定する。
+- approved または publish_requested でない DraftPost は投稿不可。
+- dry-run では SharePoint への作成・更新を行わない。
+- 投稿結果は Publication と AuditEvent に記録する。
 
 ## Site Page Content Model
 
@@ -155,7 +162,8 @@ MVP の記事構成は `docs/specs/draft-composition.md` に従います。
 - advisory_ids
 - target site/page library/page
 - operation: dry-run / create / update / publish
-- actor or service principal
+- approver
+- publisher identity
 - approval status
 - idempotency_key
 - SharePoint page ID
@@ -163,21 +171,11 @@ MVP の記事構成は `docs/specs/draft-composition.md` に従います。
 - error code
 - timestamp
 
-ログに出してはいけない項目:
-
-- access token
-- refresh token
-- client secret
-- certificate private key
-- authorization header
-- cookie
-
 ## Open Questions
 
-- 承認後に SPAutoPost が公開まで行うか、SharePoint 側の承認フローに渡すだけか。
-- Delegated permission と application permission のどちらを使うか。
+- News としての publish / promote 操作を M1 に含めるか。
 - 添付ファイルや画像を初期対象に含めるか。
-- News としての publish / promote 操作を MVP に含めるか。
+- 専用 SharePoint site での公開範囲をどこまでにするか。
 
 ## Related Issues
 
