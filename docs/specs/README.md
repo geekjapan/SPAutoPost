@@ -6,6 +6,26 @@
 
 Spec は GitHub repo 上の正本です。実装エージェントは、Issue と関連 Spec を確認してから OpenSpec change を作成し、実装します。
 
+## Spec 一覧
+
+| Spec | Status | 主な関連 Issue | 内容 |
+|---|---|---|---|
+| `initial-system.md` | Proposed | #1 | 初期システム境界、ワークフロー、主要データモデル |
+| `sharepoint-publishing.md` | Proposed | #2, #9, #20 | SharePoint 投稿方式、権限、下書き、公開、冪等性 |
+| `data-model.md` | Proposed | #3, #10, #20 | Advisory / DraftPost / Publication / AuditEvent |
+| `llm-provider.md` | Proposed | #6, #15, #16, #17, #18 | LLM provider 分類、実稼働/テスト分離、入力制限 |
+| `draft-composition.md` | Proposed | #8, #18, #19 | 掲示板原稿構成、文体、出典、AI 出力検査 |
+| `source-collection.md` | Proposed | #7, #11, #12, #13, #21 | 脆弱性情報源 adapter、差分取得、出典保持 |
+| `normalization-and-triage.md` | Proposed | #14, #18, #19 | 名寄せ、重複排除、優先度判定、掲載候補判定 |
+| `review-approval-workflow.md` | Proposed | #19, #20 | 人間レビュー、承認、差し戻し、公開制御 |
+| `audit-log.md` | Proposed | #5, #10, #19, #22 | 監査ログ、correlation ID、保存禁止項目 |
+| `security-baseline.md` | Proposed | #5, #15, #22 | Secret、権限最小化、LLM 入力制限、投稿安全性 |
+| `configuration.md` | Proposed | #4, #6, #9, #10 | config、環境変数、feature flag、dry-run |
+| `error-handling.md` | Proposed | #10, #20, #21, #22 | error code、retry/backoff、停止条件 |
+| `external-collector-boundary.md` | Proposed | #13, #21 | crawler / collector 外部化時の import 境界 |
+
+全体の設計書面一覧は `docs/design-documents.md` を参照してください。
+
 ## 推奨構成
 
 Spec には、可能な限り次を含めます。
@@ -42,8 +62,8 @@ Spec には、可能な限り次を含めます。
 例:
 
 ```text
-post-scheduler.md
-account-integration.md
+sharepoint-publishing.md
+llm-provider.md
 audit-log.md
 ```
 
@@ -53,3 +73,4 @@ audit-log.md
 - 実装だけを変更し、Spec を放置しないでください。
 - 仕様が未確定の場合は、未確定であることを明記します。
 - セキュリティ、外部 API、投稿動作に関わる仕様は推測で補完しません。
+- Status を Accepted にする場合は、関連 Issue または decision record で判断根拠を残してください。
