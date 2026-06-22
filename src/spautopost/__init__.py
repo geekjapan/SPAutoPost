@@ -1,0 +1,1 @@
+"""SPAutoPost storage baseline package."""

@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "spautopost"
+version = "0.0.0"
+description = "SharePoint auto-post — storage baseline (canonical entities + AdminCommand queue)"
+requires-python = ">=3.11"
+dependencies = []
+
+# psycopg は PostgreSQL adapter を実走させる時だけ必要（遅延 import）。
+# 通常のテストは SQLite substrate で動くため zero-install。
+[project.optional-dependencies]
+postgres = ["psycopg[binary]>=3.1"]
+
+[tool.setuptools.packages.find]
+where = ["src"]

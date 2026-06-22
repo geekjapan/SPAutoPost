@@ -1,1 +1,18 @@
 graphify-out/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.venv/
+venv/
+
+# Tooling / machine-local config
+.claude/
+.codex/
+
+# Env / secrets
+.env
+.env.*
