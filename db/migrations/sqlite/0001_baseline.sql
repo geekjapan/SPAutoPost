@@ -200,3 +200,31 @@ CREATE TABLE audit_events (
     error_code             TEXT,
     error_message          TEXT
 );
+
+-- Admin UI/API から Python core への非同期 command inbox。
+-- payload は JSON TEXT だが Secret は storage 境界で拒否する。
+CREATE TABLE admin_commands (
+    command_id      TEXT PRIMARY KEY,
+    command_type    TEXT NOT NULL
+        CHECK (command_type IN (
+            'edit', 'approve', 'reject', 'request_regeneration', 'publish_request'
+        )),
+    target_draft_id TEXT,
+    requested_by    TEXT,
+    payload         TEXT NOT NULL DEFAULT '{}',
+    idempotency_key TEXT NOT NULL,
+    status          TEXT NOT NULL DEFAULT 'pending'
+        CHECK (status IN ('pending', 'processing', 'succeeded', 'failed', 'cancelled')),
+    error_code      TEXT,
+    error_message   TEXT,
+    correlation_id  TEXT,
+    created_at      TEXT NOT NULL,
+    processed_at    TEXT,
+    FOREIGN KEY (target_draft_id) REFERENCES draft_posts (draft_id)
+);
+
+CREATE UNIQUE INDEX ux_admin_commands_idempotency_key
+    ON admin_commands (idempotency_key);
+
+CREATE INDEX ix_admin_commands_status ON admin_commands (status);
+CREATE INDEX ix_admin_commands_target_draft_id ON admin_commands (target_draft_id);

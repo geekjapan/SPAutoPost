@@ -193,7 +193,7 @@ def test_table_sets_are_equal() -> None:
     pg = _parse(_POSTGRES_SQL)
     lite = _parse(_SQLITE_SQL)
     assert pg["tables"] == lite["tables"]
-    # 6 ルートエンティティが揃っていることを保証 (回帰防止)。
+    # 6 ルートエンティティ + AdminCommand queue が揃っていることを保証 (回帰防止)。
     assert pg["tables"] == {
         "source_records",
         "advisories",
@@ -201,6 +201,7 @@ def test_table_sets_are_equal() -> None:
         "review_events",
         "publications",
         "audit_events",
+        "admin_commands",
     }
 
 
@@ -235,6 +236,11 @@ def test_unique_index_sets_are_equal() -> None:
     assert (
         "ux_publications_idempotency_key",
         "publications",
+        "idempotency_key",
+    ) in pg
+    assert (
+        "ux_admin_commands_idempotency_key",
+        "admin_commands",
         "idempotency_key",
     ) in pg
 

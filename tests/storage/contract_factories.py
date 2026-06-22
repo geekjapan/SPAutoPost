@@ -6,8 +6,10 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from typing import Any
 
 from spautopost.storage.models import (
+    AdminCommand,
     Advisory,
     AuditEvent,
     DraftPost,
@@ -121,4 +123,26 @@ def make_audit_event(
         target_site_id="site-1",
         idempotency_key="idem-1",
         operation="dry-run",
+    )
+
+
+def make_admin_command(
+    *,
+    command_id: str = "cmd-1",
+    idempotency_key: str = "cmd-idem-1",
+    created_at: datetime | None = None,
+    target_draft_id: str | None = "draft-1",
+    status: str = "pending",
+    payload: dict[str, Any] | None = None,
+) -> AdminCommand:
+    return AdminCommand(
+        command_id=command_id,
+        command_type="approve",
+        target_draft_id=target_draft_id,
+        requested_by="alice",
+        payload=payload or {"comment": "ok"},
+        idempotency_key=idempotency_key,
+        status=status,  # type: ignore[arg-type]
+        correlation_id="corr-1",
+        created_at=created_at or _utc(2024, 1, 1),
     )

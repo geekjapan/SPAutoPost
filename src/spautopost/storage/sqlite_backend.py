@@ -20,14 +20,15 @@ import sqlite3
 from collections.abc import Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from dataclasses import fields
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from .errors import ConstraintViolationError
 from .migrate import DEFAULT_MIGRATIONS_ROOT, run_migrations
 from .migrate import pending_migrations as _pending_migrations
 from .models import (
+    AdminCommand,
     Advisory,
     AuditEvent,
     DraftPost,
@@ -50,6 +51,7 @@ _JSON_FIELDS: frozenset[str] = frozenset(
         "validation_warnings",
         "review_comments",
         "related_ids",
+        "payload",
     }
 )
 
@@ -178,7 +180,7 @@ class _Repository:
         if not self._tx_state.in_transaction:
             self._conn.rollback()
 
-    def _row_to_dto(self, row: sqlite3.Row) -> Any:
+    def _row_to_dto(self, row: Any) -> Any:
         kwargs = {name: _from_db_value(name, self._dto_cls, row[name]) for name in self._columns}
         return self._dto_cls(**kwargs)
 
@@ -279,6 +281,88 @@ class _PublicationRepository(_Repository):
         return self._row_to_dto(row) if row is not None else None
 
 
+class _AdminCommandRepository(_Repository):
+    """admin_commands 用 repository (append-only queue + claim)。"""
+
+    def append(self, command: AdminCommand) -> AdminCommand:
+        return cast(AdminCommand, self._insert_or_replace(command, replace=False))
+
+    def claim_pending(self, *, limit: int = 100) -> Sequence[AdminCommand]:
+        if self._tx_state.in_transaction:
+            return self._claim_pending_locked(limit)
+        self._conn.execute("BEGIN IMMEDIATE")
+        self._tx_state.in_transaction = True
+        try:
+            commands = self._claim_pending_locked(limit)
+            self._tx_state.in_transaction = False
+            self._conn.commit()
+            return commands
+        except Exception:
+            self._tx_state.in_transaction = False
+            self._conn.rollback()
+            raise
+
+    def _claim_pending_locked(self, limit: int) -> Sequence[AdminCommand]:
+        cur = self._conn.execute(
+            f"SELECT * FROM {self._table} "  # noqa: S608
+            "WHERE status = 'pending' ORDER BY created_at ASC, command_id ASC LIMIT ?",
+            (limit,),
+        )
+        rows = cur.fetchall()
+        ids = [row["command_id"] for row in rows]
+        if ids:
+            marks = ", ".join("?" for _ in ids)
+            self._conn.execute(
+                f"UPDATE {self._table} SET status = 'processing' "  # noqa: S608
+                f"WHERE command_id IN ({marks})",
+                ids,
+            )
+        return [self._row_to_dto(dict(row) | {"status": "processing"}) for row in rows]
+
+    def complete(self, command_id: str) -> None:
+        self._finish(command_id, status="succeeded")
+
+    def fail(
+        self,
+        command_id: str,
+        *,
+        error_code: str | None = None,
+        error_message: str | None = None,
+    ) -> None:
+        self._finish(
+            command_id,
+            status="failed",
+            error_code=error_code,
+            error_message=error_message,
+        )
+
+    def _finish(
+        self,
+        command_id: str,
+        *,
+        status: str,
+        error_code: str | None = None,
+        error_message: str | None = None,
+    ) -> None:
+        try:
+            self._conn.execute(
+                f"UPDATE {self._table} "  # noqa: S608
+                "SET status = ?, error_code = ?, error_message = ?, processed_at = ? "
+                "WHERE command_id = ?",
+                (
+                    status,
+                    error_code,
+                    error_message,
+                    _to_db_value("processed_at", datetime.now(UTC)),
+                    command_id,
+                ),
+            )
+            self._maybe_commit()
+        except sqlite3.IntegrityError as exc:
+            self._maybe_rollback()
+            raise _wrap_integrity(exc) from exc
+
+
 class SQLiteStorage:
     """``StoragePort`` を満たす SQLite backend。"""
 
@@ -309,6 +393,9 @@ class SQLiteStorage:
         self._audit_events = _AppendOnlyRepository(
             self._conn, "audit_events", AuditEvent, "audit_event_id", tx
         )
+        self._admin_commands = _AdminCommandRepository(
+            self._conn, "admin_commands", AdminCommand, "command_id", tx
+        )
 
     @property
     def source_records(self) -> _UpsertRepository:
@@ -333,6 +420,10 @@ class SQLiteStorage:
     @property
     def audit_events(self) -> _AppendOnlyRepository:
         return self._audit_events
+
+    @property
+    def admin_commands(self) -> _AdminCommandRepository:
+        return self._admin_commands
 
     def migrate(self) -> None:
         run_migrations(self._conn, self._migrations_root, "sqlite")

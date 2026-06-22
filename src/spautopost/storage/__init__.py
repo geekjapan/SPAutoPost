@@ -19,6 +19,7 @@ from .errors import (
     UnknownProviderError,
 )
 from .models import (
+    AdminCommand,
     Advisory,
     AuditEvent,
     DraftPost,
@@ -28,6 +29,7 @@ from .models import (
 )
 
 __all__ = [
+    "AdminCommand",
     "Advisory",
     "AuditEvent",
     "ConstraintViolationError",
