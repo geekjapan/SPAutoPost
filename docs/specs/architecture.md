@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted for MVP direction. Proposed for Microsoft Graph authentication and detailed Azure deployment parameters.
+Accepted for MVP direction. Proposed for Microsoft Graph hosted authentication and detailed Azure deployment parameters.
 
 ## Purpose
 
@@ -16,12 +16,15 @@ MVP では、次の構成を採用します。
 - Local/Dev Interface: CLI / Batch command
 - Hosted Runtime: Azure Container Apps / Azure Container Apps Jobs を主候補とする
 - Scheduled Collection: ユーザー端末ではなく Azure 上の scheduled job / worker で実行する
-- Admin Review: 管理者が生成記事を確認・修正・確定できる Admin API / UI を M1 に含める
-- Frontend/API: 管理画面が必要になった段階で TypeScript / Node.js を採用する
-- Storage: MVP は SQLite + YAML/JSON fixtures とする。量、同時実行、運用要件が増えたら Azure managed database へ移行する
+- Admin UI/API: M1 から TypeScript / Node.js を採用する
+- Storage: M1 hosted PoC は Azure Database for PostgreSQL Flexible Server を採用する
+- Local/Test Storage: SQLite は local development、unit test、offline dry-run 用として残す
 - SharePoint Publishing: SharePoint Site Page / News article 形式を採用する
 - Publishing Safety: draft / review / approval を基本とし、人間確認なしの本番自動公開は MVP 対象外
 - LLM: mock provider を必須とし、production provider は provider interface 経由で追加する
+- Admin Login: Microsoft Entra ID を利用する
+- Graph Local PoC: 当面は delegated permission を許容する
+- Graph Hosted Runtime: managed identity / application permission / delegated permission の比較を #27 で継続する
 - Observability: MVP では app-level audit log を実装し、Log Analytics 連携は M6 Production Hardening で扱う
 - External Collector: MVP では import schema と境界のみを定義する
 
@@ -43,20 +46,23 @@ CLI / Batch は次の用途に残します。
 
 ```text
 Azure Container Apps Environment
-  ├─ SPAutoPost Admin/API App
+  ├─ SPAutoPost Admin UI/API
+  │    ├─ TypeScript / Node.js
+  │    ├─ Microsoft Entra ID login
   │    ├─ Review / Approval API
   │    ├─ Draft management
   │    ├─ Publication management
   │    └─ Audit query
   │
   ├─ SPAutoPost Scheduled Jobs
+  │    ├─ Python core commands
   │    ├─ collect-advisories
   │    ├─ normalize-and-triage
   │    ├─ generate-drafts
   │    └─ publish-approved
   │
   ├─ Storage
-  │    ├─ SQLite for MVP
+  │    ├─ Azure Database for PostgreSQL Flexible Server
   │    ├─ Advisory / DraftPost / Publication / AuditEvent
   │    └─ fixtures / import files
   │
@@ -68,7 +74,7 @@ Azure Container Apps Environment
 
 ## MVP Runtime Model
 
-MVP の最小実装単位は Python CLI / Batch command とします。
+MVP の core processing は Python CLI / Batch command として実装します。
 
 ```text
 spautopost <command> [options]
@@ -89,16 +95,20 @@ approve
 publish-dry-run
 publish-draft
 audit-export
-serve-admin-api
 ```
 
-MVP 初期は CLI / Batch で縦串を通します。ただし、設計上は Azure Container Apps Jobs から各 command を起動できるようにします。
-
-Admin API / UI は M1 に含めます。管理者が記事を確認、修正、確定し、その後 SharePoint Site Page / News に投稿する流れを前提にします。
+Admin UI/API は M1 に含め、TypeScript / Node.js で実装します。
 
 ## High-Level Architecture
 
 ```text
+TypeScript / Node.js Admin UI/API
+  ├─ Entra ID login
+  ├─ DraftPost list/detail
+  ├─ edit / approve / reject / request regeneration
+  ├─ publish request
+  └─ AuditEvent view
+
 SPAutoPost Core Python Package
   ├─ Config Loader
   ├─ Source Input / Source Adapters
@@ -115,10 +125,9 @@ SPAutoPost Core Python Package
   ├─ Storage Port
   └─ Audit Logger
 
-Entrypoints
-  ├─ Python CLI / Batch
-  ├─ Azure Container Apps Jobs
-  └─ Admin API / UI
+Storage
+  ├─ PostgreSQL for M1 hosted PoC
+  └─ SQLite for local/test only
 ```
 
 ## Data Flow
@@ -132,12 +141,28 @@ Scheduled Job / Manual Import
   -> LLM Provider
   -> DraftPost
   -> Draft Validation
-  -> Admin Review / Approval
+  -> Admin UI Review / Approval
   -> SharePoint Site Page / News Draft or Publish
   -> AuditEvent
 ```
 
 ## Module Responsibilities
+
+### TypeScript / Node.js Admin UI/API
+
+- Microsoft Entra ID login を扱う
+- DraftPost 一覧と詳細を表示する
+- validation warning を表示する
+- 管理者による記事修正を扱う
+- approve / reject / request regeneration を扱う
+- publish request を扱う
+- AuditEvent を参照する
+
+### Python CLI / Batch
+
+- local development と dry-run を支える
+- Azure Container Apps Jobs の command entrypoint として動作する
+- 収集、正規化、トリアージ、記事生成、検証、投稿処理を呼び出す
 
 ### Config Loader
 
@@ -188,12 +213,13 @@ Scheduled Job / Manual Import
 
 - DraftPost の status を管理する
 - 管理者が記事を確認、修正、確定できるようにする
-- M1 で Admin API / UI の最小機能を含める
+- M1 で Admin UI/API の最小機能を含める
 - approved でない DraftPost は publish できない
 
 ### SharePoint Site Page / News Publisher
 
 - SharePoint Site Page / News article 形式で投稿 payload を作成する
+- local PoC では delegated permission を許容する
 - dry-run preview を提供する
 - test site / draft posting を扱う
 - approved item のみ publish 対象にする
@@ -202,7 +228,7 @@ Scheduled Job / Manual Import
 
 ### Storage
 
-MVP では SQLite を採用します。
+M1 hosted PoC では Azure Database for PostgreSQL Flexible Server を採用します。
 
 保存対象:
 
@@ -213,22 +239,16 @@ MVP では SQLite を採用します。
 - Publication
 - AuditEvent
 
-fixture:
+local/test:
 
-- manual advisory input
-- mock provider response
-- test publication payload
-
-移行方針:
-
-- データ量、同時実行、バックアップ、監査保持、複数インスタンス運用の要件が増えたら Azure managed database へ移行する
-- 移行候補は Azure SQL Database、PostgreSQL-compatible managed DB、Azure Storage / Table Storage とする
-- SQLite schema は将来移行しやすいように明示的に管理する
+- SQLite adapter を許容する
+- manual advisory input、mock provider response、test publication payload は YAML/JSON fixture で扱う
 
 ### Audit Logger
 
 - すべての主要操作に correlation_id を付与する
 - provider、prompt_version、reviewer、publication result を記録する
+- approve した user principal と publish を実行した identity を記録する
 - Secret を保存しない
 - MVP では app-level audit log を実装する
 - Log Analytics 連携は M6 Production Hardening で扱う
@@ -239,7 +259,7 @@ fixture:
 External Sources
   -> SPAutoPost controlled processing on Azure
   -> LLM Provider
-  -> Admin Reviewer
+  -> Admin Reviewer via Entra ID
   -> Microsoft Graph / SharePoint Site Page / News
 ```
 
@@ -259,39 +279,16 @@ External Sources
 - 本格 external crawler 実装
 - SIEM / ITSM 連携
 - Log Analytics 連携
-- PostgreSQL / Azure SQL などの managed database 確定
-
-## Future Architecture
-
-管理 UI/API では、TypeScript / Node.js を候補とします。
-
-候補:
-
-```text
-TypeScript / Node.js Admin UI
-  -> Admin API
-      -> SPAutoPost Core Python package or service boundary
-          -> Storage / LLM Provider / SharePoint Publisher
-```
-
-または:
-
-```text
-External Collector
-  -> Normalized Advisory Import
-      -> SPAutoPost Azure Jobs / API
-          -> Draft / Review / SharePoint Publish
-```
+- managed identity / app-only Graph 認証の本番確定
 
 ## Open Questions
 
 MVP 実装前または M1 途中で決める必要がある未決事項:
 
-- Microsoft Graph 認証方式を delegated / application / managed identity のどれにするか
+- Azure hosted runtime の Graph 認証方式を delegated / application / managed identity のどれにするか
 - Azure OpenAI / Foundry provider を M1 に含めるか、M3 まで待つか
 - Container Apps の app / job 分割をどこまで M1 に含めるか
-- SQLite を Azure hosted runtime 上でどのように永続化するか
-- Admin API / UI を Python 側で最小実装するか、M1 から TypeScript / Node.js を入れるか
+- Admin UI/API と Python core の呼び出し境界を process / HTTP / shared DB のどれにするか
 
 ## Related Issues
 
@@ -305,3 +302,6 @@ MVP 実装前または M1 途中で決める必要がある未決事項:
 - #21 Add scheduler and external collector import boundary
 - #23 Review and finalize detailed design documents
 - #26 Define minimal admin review API and UI boundary
+- #27 Decide Microsoft Graph authentication model
+- #28 Implement PostgreSQL storage and migration baseline
+- #29 Implement Entra ID login for Admin API/UI
