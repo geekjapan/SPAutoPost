@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted for MVP direction. Proposed for storage, authentication, and detailed Azure deployment parameters.
+Accepted for MVP direction. Proposed for Microsoft Graph authentication and detailed Azure deployment parameters.
 
 ## Purpose
 
@@ -16,12 +16,13 @@ MVP では、次の構成を採用します。
 - Local/Dev Interface: CLI / Batch command
 - Hosted Runtime: Azure Container Apps / Azure Container Apps Jobs を主候補とする
 - Scheduled Collection: ユーザー端末ではなく Azure 上の scheduled job / worker で実行する
-- Admin Review: 管理者が生成記事を確認・修正・確定できる UI/API を早期に追加する
+- Admin Review: 管理者が生成記事を確認・修正・確定できる Admin API / UI を M1 に含める
 - Frontend/API: 管理画面が必要になった段階で TypeScript / Node.js を採用する
-- Storage: SQLite + YAML/JSON fixtures を第一候補とするが、Azure 上の常時運用では Azure managed storage への移行を検討する
+- Storage: MVP は SQLite + YAML/JSON fixtures とする。量、同時実行、運用要件が増えたら Azure managed database へ移行する
 - SharePoint Publishing: SharePoint Site Page / News article 形式を採用する
 - Publishing Safety: draft / review / approval を基本とし、人間確認なしの本番自動公開は MVP 対象外
 - LLM: mock provider を必須とし、production provider は provider interface 経由で追加する
+- Observability: MVP では app-level audit log を実装し、Log Analytics 連携は M6 Production Hardening で扱う
 - External Collector: MVP では import schema と境界のみを定義する
 
 ## Key Architecture Decision
@@ -55,6 +56,7 @@ Azure Container Apps Environment
   │    └─ publish-approved
   │
   ├─ Storage
+  │    ├─ SQLite for MVP
   │    ├─ Advisory / DraftPost / Publication / AuditEvent
   │    └─ fixtures / import files
   │
@@ -87,12 +89,12 @@ approve
 publish-dry-run
 publish-draft
 audit-export
-serve-admin-api future
+serve-admin-api
 ```
 
 MVP 初期は CLI / Batch で縦串を通します。ただし、設計上は Azure Container Apps Jobs から各 command を起動できるようにします。
 
-管理 UI/API は MVP 初期の必須条件にはしませんが、MVP の運用像としては早期追加対象とします。管理者が記事を確認、修正、確定し、その後 SharePoint Site Page / News に投稿する流れを前提にします。
+Admin API / UI は M1 に含めます。管理者が記事を確認、修正、確定し、その後 SharePoint Site Page / News に投稿する流れを前提にします。
 
 ## High-Level Architecture
 
@@ -116,7 +118,7 @@ SPAutoPost Core Python Package
 Entrypoints
   ├─ Python CLI / Batch
   ├─ Azure Container Apps Jobs
-  └─ Admin API / UI future
+  └─ Admin API / UI
 ```
 
 ## Data Flow
@@ -186,7 +188,7 @@ Scheduled Job / Manual Import
 
 - DraftPost の status を管理する
 - 管理者が記事を確認、修正、確定できるようにする
-- MVP 初期は CLI 操作でもよいが、早期に Admin API / UI で操作できるようにする
+- M1 で Admin API / UI の最小機能を含める
 - approved でない DraftPost は publish できない
 
 ### SharePoint Site Page / News Publisher
@@ -200,7 +202,7 @@ Scheduled Job / Manual Import
 
 ### Storage
 
-MVP では SQLite を第一候補とします。ただし、Azure hosted runtime では永続化と同時実行を考慮し、Azure managed storage への移行余地を残します。
+MVP では SQLite を採用します。
 
 保存対象:
 
@@ -217,19 +219,19 @@ fixture:
 - mock provider response
 - test publication payload
 
-Azure hosted runtime で再検討する候補:
+移行方針:
 
-- Azure SQL Database
-- PostgreSQL-compatible managed DB
-- Azure Storage / Table Storage
-- SharePoint List as auxiliary state store
+- データ量、同時実行、バックアップ、監査保持、複数インスタンス運用の要件が増えたら Azure managed database へ移行する
+- 移行候補は Azure SQL Database、PostgreSQL-compatible managed DB、Azure Storage / Table Storage とする
+- SQLite schema は将来移行しやすいように明示的に管理する
 
 ### Audit Logger
 
 - すべての主要操作に correlation_id を付与する
 - provider、prompt_version、reviewer、publication result を記録する
 - Secret を保存しない
-- Azure hosted runtime では Log Analytics 連携を検討する
+- MVP では app-level audit log を実装する
+- Log Analytics 連携は M6 Production Hardening で扱う
 
 ## Trust Boundaries
 
@@ -251,17 +253,17 @@ External Sources
 
 ## MVP Non-Goals
 
-- 本格的な多人数管理 UI
 - 複雑な多段承認
 - 本番自動公開
 - 本格 scheduler orchestration platform
 - 本格 external crawler 実装
 - SIEM / ITSM 連携
-- PostgreSQL / Azure SQL などの本番 DB 確定
+- Log Analytics 連携
+- PostgreSQL / Azure SQL などの managed database 確定
 
 ## Future Architecture
 
-管理 UI/API を追加する段階では、TypeScript / Node.js を候補とします。
+管理 UI/API では、TypeScript / Node.js を候補とします。
 
 候補:
 
@@ -285,12 +287,11 @@ External Collector
 
 MVP 実装前または M1 途中で決める必要がある未決事項:
 
-- MVP の storage を SQLite のまま Azure に載せるか、早期に Azure managed storage へ寄せるか
 - Microsoft Graph 認証方式を delegated / application / managed identity のどれにするか
 - Azure OpenAI / Foundry provider を M1 に含めるか、M3 まで待つか
-- review / approve 操作を CLI command とするか、Admin API / UI を M1 に含めるか
 - Container Apps の app / job 分割をどこまで M1 に含めるか
-- Log Analytics 連携を M1 に含めるか M6 に送るか
+- SQLite を Azure hosted runtime 上でどのように永続化するか
+- Admin API / UI を Python 側で最小実装するか、M1 から TypeScript / Node.js を入れるか
 
 ## Related Issues
 
@@ -303,3 +304,4 @@ MVP 実装前または M1 途中で決める必要がある未決事項:
 - #10 Implement dry-run preview and minimal audit log
 - #21 Add scheduler and external collector import boundary
 - #23 Review and finalize detailed design documents
+- #26 Define minimal admin review API and UI boundary
