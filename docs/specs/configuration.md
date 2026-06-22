@@ -6,7 +6,7 @@ Proposed
 
 ## Purpose
 
-この Spec は、SPAutoPost の設定ファイル、環境変数、provider 切替、SharePoint 投稿先、source adapter、dry-run、feature flag の扱いを定義します。
+この Spec は、SPAutoPost の設定ファイル、環境変数、provider 切替、SharePoint 投稿先、database、source adapter、dry-run、feature flag の扱いを定義します。
 
 ## Principles
 
@@ -15,6 +15,8 @@ Proposed
 - 投稿先は明示的に固定する。
 - dry-run を既定値にできる。
 - provider と source adapter は設定で切り替え可能にする。
+- M1 hosted PoC の正本 database は PostgreSQL とする。
+- local/test では SQLite adapter を許容する。
 
 ## Config File
 
@@ -37,17 +39,27 @@ app:
   dry_run: true
   log_level: info
 
+server:
+  admin_ui_enabled: true
+  admin_api_enabled: true
+  auth_provider: entra_id
+
+storage:
+  provider: postgresql # postgresql | sqlite
+  database_url: env:SPAUTOPOST_DATABASE_URL
+  sqlite_path: ./data/spautopost.dev.sqlite3
+
 llm:
   provider: mock
   prompt_version: v1
 
 sharepoint:
-  mode: list-item
+  mode: site-page
   default_draft: true
   allow_publish: false
   tenant_id: env:SPAUTOPOST_TENANT_ID
   site_id: env:SPAUTOPOST_SHAREPOINT_SITE_ID
-  list_id: env:SPAUTOPOST_SHAREPOINT_LIST_ID
+  page_library_id: env:SPAUTOPOST_SHAREPOINT_PAGE_LIBRARY_ID
 
 sources:
   manual:
@@ -58,6 +70,10 @@ sources:
     api_key: env:SPAUTOPOST_NVD_API_KEY
   myjvn:
     enabled: false
+
+graph:
+  local_poc_auth: delegated
+  hosted_auth: undecided
 
 security:
   block_auto_publish: true
@@ -75,14 +91,33 @@ SPAUTOPOST_
 
 例:
 
+- SPAUTOPOST_DATABASE_URL
 - SPAUTOPOST_TENANT_ID
 - SPAUTOPOST_SHAREPOINT_SITE_ID
-- SPAUTOPOST_SHAREPOINT_LIST_ID
 - SPAUTOPOST_SHAREPOINT_PAGE_LIBRARY_ID
 - SPAUTOPOST_AZURE_OPENAI_ENDPOINT
 - SPAUTOPOST_AZURE_OPENAI_DEPLOYMENT
 - SPAUTOPOST_AZURE_OPENAI_API_KEY
 - SPAUTOPOST_NVD_API_KEY
+
+## Database Configuration
+
+M1 hosted PoC:
+
+- provider: postgresql
+- database_url: env:SPAUTOPOST_DATABASE_URL
+
+local/test:
+
+- provider: sqlite
+- sqlite_path: local path
+
+実装要件:
+
+- database_url の値をログに出さない。
+- hosted environment では postgresql を既定とする。
+- sqlite は local/test/offline dry-run 用に限定する。
+- migration は PostgreSQL schema を基準にする。
 
 ## Secret Reference
 
@@ -106,6 +141,8 @@ config には `env:NAME` のような参照だけを書きます。
 - enable_site_page_publish
 - enable_generic_llm_provider
 - enable_manual_test_provider
+- enable_admin_ui
+- enable_admin_api
 
 ## Dry Run
 
@@ -121,6 +158,8 @@ config には `env:NAME` のような参照だけを書きます。
 起動時に検査する項目:
 
 - environment
+- storage provider
+- database connection setting
 - provider selection
 - SharePoint mode
 - required target IDs
@@ -134,3 +173,4 @@ config には `env:NAME` のような参照だけを書きます。
 - #6 Implement LLM provider interface with mock provider
 - #9 Implement SharePoint connector proof-of-concept
 - #10 Implement dry-run preview and minimal audit log
+- #28 Implement PostgreSQL storage and migration baseline
