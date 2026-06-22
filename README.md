@@ -8,6 +8,14 @@ SPAutoPost は、社内 SharePoint サイトのお知らせ掲示板に、セキ
 
 このリポジトリでは、GitHub に記載された Spec / Milestone / Issue をプロジェクトの正本として扱います。Claude Code / Codex などの実装エージェントは、Milestone に沿って Issue を OpenSpec change に落とし込み、実装・検証・Pull Request 作成を行います。
 
+## MVP アーキテクチャ方針
+
+MVP の core language は Python とし、最小実装単位は CLI / Batch command とします。
+
+ただし、定期的な情報収集、記事生成、投稿待ち管理、投稿処理は人間ユーザーの端末に依存させず、Azure Container Apps / Azure Container Apps Jobs を主候補とする Azure hosted runtime に寄せます。
+
+SharePoint への掲載方式は、SharePoint Site Page / News article 形式を採用します。
+
 ## 運用原則
 
 1. GitHub repo に記載された内容を正本とします。
@@ -28,7 +36,8 @@ SPAutoPost は、社内 SharePoint サイトのお知らせ掲示板に、セキ
 - [docs/openspec-workflow.md](./docs/openspec-workflow.md): Issue から OpenSpec change へ落とし込む手順
 - [docs/specs/README.md](./docs/specs/README.md): Spec 一覧と管理方針
 - [docs/specs/initial-system.md](./docs/specs/initial-system.md): 初期システム仕様
-- [docs/specs/sharepoint-publishing.md](./docs/specs/sharepoint-publishing.md): SharePoint 投稿仕様
+- [docs/specs/architecture.md](./docs/specs/architecture.md): Azure hosted core / MVP アーキテクチャ仕様
+- [docs/specs/sharepoint-publishing.md](./docs/specs/sharepoint-publishing.md): SharePoint Site Page / News 投稿仕様
 - [docs/specs/data-model.md](./docs/specs/data-model.md): 正規化データモデル仕様
 - [docs/specs/llm-provider.md](./docs/specs/llm-provider.md): LLM provider 仕様
 - [docs/specs/draft-composition.md](./docs/specs/draft-composition.md): 掲示板原稿仕様
@@ -51,4 +60,4 @@ SPAutoPost は、社内 SharePoint サイトのお知らせ掲示板に、セキ
 
 ## 現在の状態
 
-初期設計セットアップ段階です。M0 では SharePoint 投稿方式、データモデル、セキュリティ baseline、監査ログ、設定方針を確定し、その後 M1 の MVP 実装へ進みます。
+初期設計セットアップ段階です。M0 では Azure hosted core、SharePoint Site Page / News 投稿方式、データモデル、セキュリティ baseline、監査ログ、設定方針を確定し、その後 M1 の MVP 実装へ進みます。
