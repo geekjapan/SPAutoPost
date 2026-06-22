@@ -28,6 +28,91 @@ M1 MVP は、次を満たすことで完了とします。
 8. Publication と AuditEvent が記録される。
 9. Azure Container Apps / Jobs に載せるための skeleton がある。
 
+## Implementation Order
+
+M1 は次の順序で実装します。
+
+1. PostgreSQL schema / migration baseline
+2. Python core source and draft pipeline
+3. TypeScript / Node.js Admin UI/API
+4. Graph / SharePoint posting PoC
+5. Azure Container Apps / Jobs deployment skeleton
+
+Optional spike は M1 の本線を止めない範囲で並行実施します。
+
+- Firecrawl source adapter spike
+- optional LLM draft provider evaluation
+- Foundry / Azure OpenAI provider spike
+- generic LLM API provider spike
+
+## Phase 1: PostgreSQL schema / migration baseline
+
+目的:
+
+- Advisory、DraftPost、ReviewEvent、Publication、AuditEvent の保存基盤を作る。
+- Python core と TypeScript / Node.js Admin UI/API が共有する schema の正本を作る。
+
+主な関連 Issue:
+
+- #3 Define canonical advisory, draft, and publication data model
+- #28 Implement PostgreSQL storage baseline
+
+## Phase 2: Python core source and draft pipeline
+
+目的:
+
+- source input または sample source job から Advisory を作る。
+- DraftPost を自動生成する。
+- DraftPost / AuditEvent を PostgreSQL に保存する。
+
+主な関連 Issue:
+
+- #7 Implement manual advisory input and validation
+- #8 Implement draft composition template for SharePoint announcements
+- #33 Implement sample source job
+- #35 Evaluate optional LLM draft providers
+
+## Phase 3: TypeScript / Node.js Admin UI/API
+
+目的:
+
+- 生成された DraftPost を管理者が確認できるようにする。
+- 管理者が修正、承認、差し戻し、投稿要求できるようにする。
+- Entra ID login と最小 role を組み込む。
+
+主な関連 Issue:
+
+- #26 Define TypeScript Node.js Admin UI/API boundary
+- #29 Implement Entra ID login for Admin API/UI
+- #31 Implement TypeScript Node.js Admin UI API skeleton
+
+## Phase 4: Graph / SharePoint posting PoC
+
+目的:
+
+- 管理者が確定した DraftPost を、専用 SharePoint Site Page / News に投稿する。
+- local PoC では delegated permission を許容する。
+- Publication と AuditEvent を記録する。
+
+主な関連 Issue:
+
+- #9 Implement SharePoint connector proof-of-concept
+- #20 Implement SharePoint publish idempotency and state tracking
+- #32 Implement local Graph delegated posting PoC
+- #36 Implement approved publish to dedicated SharePoint News
+
+## Phase 5: Azure Container Apps / Jobs deployment skeleton
+
+目的:
+
+- Python core jobs、TypeScript / Node.js Admin UI/API、PostgreSQL を Azure hosted PoC に載せるための skeleton を用意する。
+- 本格運用ではなく、M1 の再現可能な deployment baseline を作る。
+
+主な関連 Issue:
+
+- #24 Finalize Azure hosted core architecture
+- #25 Add Azure Container Apps deployment skeleton
+
 ## Source Collection Scope
 
 M1 では、正確性よりも縦串の検証を優先します。
@@ -120,3 +205,7 @@ M1 では次を対象外とします。
 - #29 Implement Entra ID login for Admin API/UI
 - #31 Implement TypeScript Node.js Admin UI API skeleton
 - #32 Implement local Graph delegated posting PoC
+- #33 Implement sample source job
+- #34 Evaluate Firecrawl source adapter
+- #35 Evaluate optional LLM draft providers
+- #36 Implement approved publish to dedicated SharePoint News
