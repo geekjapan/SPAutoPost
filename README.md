@@ -20,14 +20,24 @@ SPAutoPost は、社内 SharePoint サイトのお知らせ掲示板に、セキ
 ## 主要ドキュメント
 
 - [AGENTS.md](./AGENTS.md): Claude Code / Codex など実装エージェント向けの作業ルール
+- [docs/design-documents.md](./docs/design-documents.md): 設計書面の一覧、状態、関連 Issue
 - [docs/product-brief.md](./docs/product-brief.md): プロダクトの目的、対象、成功条件
 - [docs/roadmap.md](./docs/roadmap.md): 推奨 Milestone と段階的ロードマップ
 - [docs/features.md](./docs/features.md): 機能分解
 - [docs/project-rules.md](./docs/project-rules.md): プロジェクト全体の運用ルール
 - [docs/openspec-workflow.md](./docs/openspec-workflow.md): Issue から OpenSpec change へ落とし込む手順
+- [docs/specs/README.md](./docs/specs/README.md): Spec 一覧と管理方針
 - [docs/specs/initial-system.md](./docs/specs/initial-system.md): 初期システム仕様
-- [docs/specs/README.md](./docs/specs/README.md): Spec の管理方針
+- [docs/specs/sharepoint-publishing.md](./docs/specs/sharepoint-publishing.md): SharePoint 投稿仕様
+- [docs/specs/data-model.md](./docs/specs/data-model.md): 正規化データモデル仕様
+- [docs/specs/llm-provider.md](./docs/specs/llm-provider.md): LLM provider 仕様
+- [docs/specs/draft-composition.md](./docs/specs/draft-composition.md): 掲示板原稿仕様
+- [docs/specs/security-baseline.md](./docs/specs/security-baseline.md): セキュリティ baseline
+- [docs/specs/audit-log.md](./docs/specs/audit-log.md): 監査ログ仕様
 - [docs/decisions/README.md](./docs/decisions/README.md): 設計判断記録の管理方針
+- [docs/runbooks/operation.md](./docs/runbooks/operation.md): 運用 runbook
+- [docs/runbooks/security-review.md](./docs/runbooks/security-review.md): セキュリティレビュー runbook
+- [docs/runbooks/incident-response.md](./docs/runbooks/incident-response.md): インシデント対応 runbook
 
 ## 権威順位
 
@@ -41,4 +51,4 @@ SPAutoPost は、社内 SharePoint サイトのお知らせ掲示板に、セキ
 
 ## 現在の状態
 
-初期セットアップ段階です。最初の Spec / Milestone / Issue を作成した後、それに基づいて OpenSpec change と実装作業を開始します。
+初期設計セットアップ段階です。M0 では SharePoint 投稿方式、データモデル、セキュリティ baseline、監査ログ、設定方針を確定し、その後 M1 の MVP 実装へ進みます。
