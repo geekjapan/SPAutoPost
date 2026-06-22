@@ -8,37 +8,34 @@ Accepted
 
 SPAutoPost は、Advisory、DraftPost、ReviewEvent、Publication、AuditEvent を保存します。
 
-MVP ではデータ量が限定的であり、まずは実装速度、ローカル検証、スキーマ確認、dry-run、移行容易性を重視します。一方で、将来的に定期収集、管理 UI/API、複数ジョブ、監査保持が進むと、managed database への移行が必要になる可能性があります。
+M1 では Azure hosted core、Azure Container Apps / Jobs、Admin API / UI を含める方針です。そのため、M1 の hosted PoC では、複数の処理から共有できる database を使います。
 
 ## Decision
 
-MVP のデータベースは SQLite とします。
+M1 の Azure hosted PoC では、Azure Database for PostgreSQL Flexible Server を採用します。
 
-データ量、同時実行、バックアップ、監査保持、複数インスタンス運用の要件が増えてきた段階で、Azure managed database へ移行します。
-
-移行候補:
-
-- Azure SQL Database
-- PostgreSQL-compatible managed database
-- Azure Storage / Table Storage
+SQLite は local development、unit test、fixture verification、offline dry-run 用として残します。
 
 ## Rationale
 
-- MVP の実装と検証が速い。
-- Python CLI / Batch と相性がよい。
-- ローカル開発と Azure Container Apps Jobs の entrypoint 検証がしやすい。
-- 将来移行に備えて schema を明示的に管理すれば、初期の過剰設計を避けられる。
+- Admin API / UI と scheduled jobs が同じ state を共有する必要がある。
+- Azure hosted PoC の運用形態に近い検証ができる。
+- M1 から schema と migration を検証できる。
+- 将来のデータ量増加や監査保持に備えやすい。
+- 後から SQLite から PostgreSQL へ移行する手戻りを減らせる。
 
 ## Consequences
 
-- MVP では SQLite schema を設計対象に含める。
-- DB migration 管理を早期に導入する。
-- Azure hosted runtime で SQLite を扱う場合、永続化、バックアップ、同時実行、ジョブ多重起動に注意する。
-- managed database への移行条件を M6 または運用拡大時に再評価する。
+- #28 は PostgreSQL storage baseline に変更する。
+- local/test では SQLite adapter を許容する。
+- M1 hosted PoC の正本 DB は PostgreSQL とする。
+- schema は PostgreSQL を基準に設計する。
+- `DATABASE_URL` または同等の接続設定を導入する。
 
 ## Related
 
 - Spec: docs/specs/architecture.md
 - Spec: docs/specs/data-model.md
+- Spec: docs/specs/configuration.md
 - Issue: #3
-- Issue: #23
+- Issue: #28
