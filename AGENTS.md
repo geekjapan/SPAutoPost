@@ -107,4 +107,9 @@ PR には最低限、次を含めてください。
 - 仕様差分の有無
 - セキュリティ上の注意点
 
+## エージェント設定ファイルの扱い
+
+- このファイル（`AGENTS.md`）が repo workflow の単一正本。`CLAUDE.md` は Claude Code 用の薄い adapter として追従させる。workflow / 権威順位 / Issue・OpenSpec 方針を変える場合は、まず `AGENTS.md` を更新し、`CLAUDE.md` には差分要約または参照だけを置く。
+- `.agents/skills` は共有/互換用の追加 skill 面であり、各 runtime 固有の `.claude/skills`・`.codex/skills`・`.opencode/skills`・`.pi/skills` と完全一致させる必要はない。
+
 Issue の完了条件を満たしていない PR は、完了扱いにしません。

@@ -4,11 +4,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**SPAutoPost** — SharePoint への自動投稿を行うツール。実装はまだ開始されていない。
+**SPAutoPost** — SharePoint への自動投稿を行うツール。設計仕様（`docs/specs/`・`docs/decisions/`）は整備済みで、アプリケーションコードはこれから着手する段階。
+
+## 正本と作業フロー
+
+このプロジェクトは GitHub 駆動方式。正本は GitHub Issue / Milestone と、リポジトリ内の `AGENTS.md`・`docs/project-rules.md`・`docs/specs/`・`docs/decisions/`。Issue を OpenSpec change に落としてから実装する。詳細フローと権威順位は `AGENTS.md` を参照（ここでは重複させない）。
 
 ## Repository State
 
-現在はソースコード・ビルド設定・テストが存在しない初期状態。実装を開始する際は以下の規約に従う。
+`src/` / `tests/` / ビルド設定はまだ無い。実装を開始する際は以下の規約に従う。
 
 ## Directory Layout (planned)
 
@@ -49,10 +53,6 @@ git diff                      # 変更内容確認
 
 Issues live in GitHub Issues (`geekjapan/SPAutoPost`). See `docs/agents/issue-tracker.md`.
 
-### Triage labels
+### Specs & decisions
 
-Five canonical roles using default label names. See `docs/agents/triage-labels.md`.
-
-### Domain docs
-
-Single-context layout: `CONTEXT.md` + `docs/adr/` at the repo root. See `docs/agents/domain.md`.
+仕様は `docs/specs/`、設計判断（ADR 相当）は `docs/decisions/`。プロジェクト規約は `docs/project-rules.md`。
