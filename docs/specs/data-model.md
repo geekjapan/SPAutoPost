@@ -54,6 +54,17 @@ SourceRecord
 
 脆弱性またはセキュリティ注意喚起を表す正規化データです。
 
+> **source_refs の baseline 実装について（reconcile note / Issue #28）**
+> 概念モデルでは `source_refs: SourceRef[]`（情報源ごとの `source_record_id` /
+> `source_name` / `source_url` / `retrieved_at` / `confidence` を持つ配列）を必須としている。
+> ストレージ baseline（`db/migrations/{postgres,sqlite}/0001_baseline.sql` と
+> `src/spautopost/storage/models.py` の `Advisory` DTO）では、当面の収集系が単一情報源を
+> 主とすることから、これを `advisories.source_record_id`（`source_records` への nullable FK 1 本）
+> へ意図的に縮退している。複数情報源・per-source confidence が必要になった時点で、
+> `source_refs` を JSONB 列（両方言）または `advisory_source_refs` junction テーブルとして
+> 追加 migration で導入し、本ノートを更新する。YAGNI に基づく延期であり、概念モデルの
+> 正本性は維持する。
+
 必須項目:
 
 - advisory_id: string
@@ -205,6 +216,15 @@ SharePoint 投稿の結果です。
 - audit_event_id: string
 - event_type: source_fetch | normalize | draft_generate | validate | review | approve | publish | error
 - correlation_id: string
+
+> **event_type の正本について（reconcile note / Issue #28）**
+> 上記の 8 値リストは概念例示であり、列挙の**正本は `docs/specs/audit-log.md` の「Event Types」（15 値）**である。
+> ストレージ baseline migration（`db/migrations/{postgres,sqlite}/0001_baseline.sql`）の
+> `audit_events.event_type` CHECK 制約は audit-log.md の 15 値
+> （source_fetch, source_parse, normalize, triage, draft_generate, draft_validate, review,
+> approve, reject, regenerate, publish_dry_run, publish_create, publish_update, publish_result, error）
+> に一致させている。新しい event_type を追加する際は audit-log.md を更新し、両方言の migration を
+> 同時に更新すること。
 - actor: string optional
 - service_principal: string optional
 - related_ids: object

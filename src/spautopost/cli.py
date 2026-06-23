@@ -62,6 +62,10 @@ def build_parser() -> argparse.ArgumentParser:
     sub = parser.add_subparsers(dest="command")
     sub.add_parser("validate-config", help="config を検証して結果を表示する")
     sub.add_parser("show-config", help="検証済み config を Secret 秘匿付きで表示する")
+    sub.add_parser(
+        "migrate",
+        help="アクティブ provider の baseline migration を適用する（--dry-run で未適用一覧のみ）",
+    )
     return parser
 
 
@@ -96,5 +100,49 @@ def _dispatch(command: str, config: Config, dry_run: bool) -> int:
         )
         print(dumped, end="")
         return EXIT_OK
+    if command == "migrate":
+        return _run_migrate(config, dry_run)
     print(f"unknown command: {command}", file=sys.stderr)  # pragma: no cover
     return EXIT_RUNTIME_ERROR  # pragma: no cover
+
+
+def _run_migrate(config: Config, dry_run: bool) -> int:
+    """アクティブ provider の migration を適用する（dry-run は未適用一覧のみ）。
+
+    Secret 値（database_url の認証情報）は出力しない。provider 名のみ表示する。
+    """
+    from .storage.errors import StorageError
+    from .storage.factory import build_storage
+
+    try:
+        storage = build_storage(config.storage)
+    except StorageError as exc:
+        print(f"storage init failed: {exc}", file=sys.stderr)
+        return EXIT_RUNTIME_ERROR
+    try:
+        provider = config.storage.provider
+        if dry_run:
+            pending = storage.pending_migrations()
+            if pending:
+                print(f"pending migrations ({provider}): {', '.join(pending)}")
+            else:
+                print(f"no pending migrations ({provider})")
+            return EXIT_OK
+        applied = _apply_migrations(storage)
+        if applied:
+            print(f"applied migrations ({provider}): {', '.join(applied)}")
+        else:
+            print(f"no pending migrations ({provider})")
+        return EXIT_OK
+    except StorageError as exc:
+        print(f"migration failed: {exc}", file=sys.stderr)
+        return EXIT_RUNTIME_ERROR
+    finally:
+        storage.close()
+
+
+def _apply_migrations(storage: object) -> list[str]:
+    """pending を確認してから migrate を適用し、適用した version を返す。"""
+    pending = storage.pending_migrations()  # type: ignore[attr-defined]
+    storage.migrate()  # type: ignore[attr-defined]
+    return list(pending)

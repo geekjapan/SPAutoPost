@@ -18,6 +18,8 @@ dependencies = ["pyyaml>=6.0"]
 
 [project.optional-dependencies]
 dev = ["ruff", "mypy", "pytest", "pytest-cov", "types-pyyaml"]
+# PostgreSQL backend は任意 extra。psycopg は postgres 分岐でのみ遅延 import する。
+postgres = ["psycopg[binary]>=3.1"]
 
 [project.scripts]
 spautopost = "spautopost.cli:main"

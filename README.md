@@ -79,6 +79,53 @@ spautopost --dry-run validate-config
 spautopost --no-dry-run validate-config   # publish は人間ゲート対象
 ```
 
+## ストレージとマイグレーション
+
+ストレージは ORM 非依存の repository ポート（`StoragePort`）越しに使用します。
+backend は `storage.provider` で選択し、`config` の必須フィールドを factory が検証します。
+
+- `provider: sqlite` … ローカル/テスト用（stdlib `sqlite3`、追加依存なし）。`storage.sqlite_path` 必須。
+- `provider: postgresql` … 本番想定。`storage.database_url` 必須。psycopg は postgres 分岐でのみ
+  遅延 import されるため、optional extra のインストールが必要です。
+
+```sh
+# PostgreSQL backend を使う場合は postgres extra を追加インストールする
+pip install -e ".[dev,postgres]"
+```
+
+スキーマの正本は方言別の SQL migration ファイル（`db/migrations/{postgres,sqlite}/NNNN_*.sql`）です。
+ORM 自動生成には依存しません。両方言は同一テーブル/制約集合を持ち、テストの
+schema-equivalence で同期を検証します（`audit_events.event_type` の列挙は `docs/specs/audit-log.md`
+の 15 値が正本）。
+
+migration ランナーは `schema_migrations(version, checksum, applied_at)` を冪等にブートストラップし、
+version 昇順に 1 ファイル 1 トランザクションで適用します。適用済みファイルの SHA-256 ドリフトを
+検知すると停止します（`MigrationDriftError`）。
+
+```sh
+# 未適用 migration の一覧のみ表示（DDL は適用しない）
+spautopost --dry-run migrate
+
+# アクティブ provider に baseline migration を適用（再実行は no-op）
+spautopost --no-dry-run migrate
+```
+
+> PostgreSQL backend の contract suite はローカルでは skip し、CI（Postgres service +
+> `SPAUTOPOST_TEST_DATABASE_URL`）で sqlite と postgres の両方を実 DB で検証します。
+> ローカルで postgres backend まで含めたフルカバレッジを取りたい場合は、以下で
+> PostgreSQL を起動してから `SPAUTOPOST_TEST_DATABASE_URL` を設定して pytest を実行します。
+>
+> ```sh
+> docker run --rm -e POSTGRES_PASSWORD=spautopost -e POSTGRES_DB=spautopost \
+>   -p 5432:5432 postgres:16
+> export SPAUTOPOST_TEST_DATABASE_URL=postgresql://postgres:spautopost@localhost:5432/spautopost
+> pytest -q --cov=spautopost --cov-report=term-missing
+> ```
+>
+> postgres backend を skip したローカル実行でも全体 80% ゲートは満たしますが、
+> `src/spautopost/storage/postgres_backend.py` のカバレッジは PG service が有る CI で
+> 担保されます（CI ゲートが正本）。
+
 検証コマンド（lint / type / test）:
 
 ```sh

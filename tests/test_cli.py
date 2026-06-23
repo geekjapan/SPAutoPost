@@ -81,3 +81,50 @@ def test_show_config_redacts_secrets(
     assert "env:SPAUTOPOST_TENANT_ID" not in out
     # 実 Secret 値も漏れない
     assert "tenant-xyz" not in out
+
+
+def _write_sqlite_config(config_dir: Path, sqlite_path: Path) -> None:
+    """既存 default.yml の sqlite_path を tmp の書込可能パスへ差し替える。"""
+    text = (config_dir / "default.yml").read_text(encoding="utf-8")
+    text = text.replace("./data/spautopost.dev.sqlite3", str(sqlite_path))
+    (config_dir / "default.yml").write_text(text, encoding="utf-8")
+
+
+def test_migrate_dry_run_lists_pending(
+    config_dir: Path,
+    valid_environ: dict[str, str],
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    _set_env(monkeypatch, valid_environ)
+    _write_sqlite_config(config_dir, tmp_path / "cli.sqlite3")
+
+    code = main(["--config-dir", str(config_dir), "--dry-run", "migrate"])
+
+    out = capsys.readouterr().out
+    assert code == 0
+    assert "pending migrations (sqlite)" in out
+    assert "0001_baseline" in out
+
+
+def test_migrate_applies_then_reports_no_pending(
+    config_dir: Path,
+    valid_environ: dict[str, str],
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    _set_env(monkeypatch, valid_environ)
+    _write_sqlite_config(config_dir, tmp_path / "cli.sqlite3")
+
+    code = main(["--config-dir", str(config_dir), "--no-dry-run", "migrate"])
+    out = capsys.readouterr().out
+    assert code == 0
+    assert "applied migrations (sqlite): 0001_baseline" in out
+
+    # 2 回目は再適用されず、未適用も無い（冪等）。
+    code2 = main(["--config-dir", str(config_dir), "--no-dry-run", "migrate"])
+    out2 = capsys.readouterr().out
+    assert code2 == 0
+    assert "no pending migrations (sqlite)" in out2
