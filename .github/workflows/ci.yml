@@ -34,17 +34,13 @@ jobs:
           else
             echo "src/ が無いため mypy をスキップ"
           fi
-      - name: Pytest (テスト未収集を許容)
+      - name: Pytest + coverage (src 存在時のみ)
         run: |
-          set +e
-          python -m pytest --cov=src --cov-report=term-missing
-          code=$?
-          set -e
-          if [ "$code" -eq 5 ]; then
-            echo "テスト未収集（現段階では OK）"
-            exit 0
+          if [ -d src ]; then
+            python -m pytest --cov=src --cov-report=term-missing
+          else
+            echo "src/ が無いためテストをスキップ（コード投入後に coverage 80% ゲートが有効化）"
           fi
-          exit "$code"
 
   secrets:
     name: Secret scan
