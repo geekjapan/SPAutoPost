@@ -1,0 +1,3 @@
+# Normalize line endings: store as LF in the repo, check out as LF.
+# Prevents CRLF churn from Windows/WSL editors across the whole tree.
+* text=auto eol=lf
