@@ -138,7 +138,7 @@ auto-merge せず必ず人間にエスカレーションする条件:
 - 認証 / 認可 / Secret / 投稿（publish）に触れる変更。
 - 権威順位の競合、または Spec 差分を伴う変更。
 - セキュリティ・法務判断が必要なもの。
-- **CI 未整備の間は auto-merge せず、PR 作成 → 人間 merge にフォールバックする**（現状 `src/`・CI 未作成）。
+- **auto-merge の実効化には branch protection で必須ステータスチェック（CI）を設定する**。CI ワークフロー（`.github/workflows/ci.yml`）は整備済みだが、必須チェック未設定の間は PR 作成 → 人間 merge にフォールバックする。
 
 ## エージェント設定ファイルの扱い
 

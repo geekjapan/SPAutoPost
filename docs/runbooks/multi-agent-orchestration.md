@@ -79,7 +79,7 @@ GitHub Milestone
 - 権威順位の競合（GitHub 正本と change/実装が矛盾）。
 - Spec 差分を伴う変更（先に Spec / Issue / OpenSpec を更新）。
 - セキュリティ / 法務上の判断が必要。
-- **CI 未整備の間**: 現状 `src/` も CI も未作成のため、auto-merge は成立しない。CI が導入されるまでは「PR 作成 → 人間 merge」にフォールバックする。
+- **必須チェック未設定の間**: CI ワークフロー（`.github/workflows/ci.yml`: ruff / mypy / pytest+coverage / gitleaks）は整備済み。auto-merge を実効化するには branch protection で必須ステータスチェックを設定する。それまでは「PR 作成 → 人間 merge」にフォールバックする。
 
 ## 5. 失敗対応
 

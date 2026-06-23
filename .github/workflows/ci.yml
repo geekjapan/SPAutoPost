@@ -1,0 +1,59 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  python:
+    name: Python checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install tools
+        run: python -m pip install --upgrade pip ruff mypy pytest pytest-cov
+      - name: Ruff lint
+        run: ruff check .
+      - name: Ruff format check
+        run: ruff format --check .
+      - name: Mypy (src のみ、存在時)
+        run: |
+          if [ -d src ]; then
+            mypy src
+          else
+            echo "src/ が無いため mypy をスキップ"
+          fi
+      - name: Pytest (テスト未収集を許容)
+        run: |
+          set +e
+          python -m pytest --cov=src --cov-report=term-missing
+          code=$?
+          set -e
+          if [ "$code" -eq 5 ]; then
+            echo "テスト未収集（現段階では OK）"
+            exit 0
+          fi
+          exit "$code"
+
+  secrets:
+    name: Secret scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
