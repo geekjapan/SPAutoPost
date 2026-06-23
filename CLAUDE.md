@@ -37,14 +37,29 @@ assets/     # 静的ファイル（必要な場合のみ）
 
 ## Commands
 
-ビルド・テスト・リントのコマンドは、ランタイムが決まった時点でここに追記する（導入コミットと同時に記載すること）。
-
-現時点で使用できるコマンド：
+ランタイムは Python 3.12+。パッケージ/ツール設定は `pyproject.toml`（`[project]` / `[tool.*]`）。
 
 ```sh
-git status --short --branch   # 作業前の状態確認
-git log --oneline -n 8        # 最近のコミット確認
-git diff                      # 変更内容確認
+# セットアップ（dev ツール込み）
+python -m venv .venv && . .venv/bin/activate
+pip install -e ".[dev]"            # または: uv pip install -e ".[dev]"
+
+# lint / format / type / test
+ruff check . && ruff format --check src tests
+mypy src
+pytest --cov=spautopost --cov-report=term-missing   # カバレッジ 80% 以上
+
+# アプリ（CLI / batch entrypoint）
+spautopost --env development validate-config         # python -m spautopost ... も可
+spautopost show-config                               # Secret は *** で秘匿表示
+
+# OpenSpec
+openspec validate <change-id> --strict
+
+# Git
+git status --short --branch
+git log --oneline -n 8
+git diff
 ```
 
 ## Key Constraints

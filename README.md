@@ -50,6 +50,43 @@ SharePoint への掲載方式は、SharePoint Site Page / News article 形式を
 - [docs/runbooks/multi-agent-orchestration.md](./docs/runbooks/multi-agent-orchestration.md): Orca + ECC + OpenSpec + agmsg による自律マルチエージェント運用 runbook
 - [orca.yaml](./orca.yaml): Orca worktree スクリプト設定（setup / issueCommand / archive）
 
+## 起動方法（開発）
+
+Python 3.12 以上を使用します。Secret はコードに含めず、`config/*.yml`（gitignore 対象）と環境変数で管理します。
+
+```sh
+# 1. 仮想環境と依存（dev ツール込み）を用意する
+python -m venv .venv && . .venv/bin/activate
+pip install -e ".[dev]"
+
+# 2. 設定サンプルをコピーして編集する（実 config は gitignore される）
+cp config.example.yml config/default.yml
+
+# 3. Secret は環境変数で渡す（config には env:NAME 参照のみ）
+export SPAUTOPOST_TENANT_ID=...
+export SPAUTOPOST_SHAREPOINT_SITE_ID=...
+export SPAUTOPOST_SHAREPOINT_PAGE_LIBRARY_ID=...
+
+# 4. 設定を検証する（CLI / batch entrypoint。将来は Azure Container Apps Jobs の command）
+spautopost --env development validate-config
+# または: python -m spautopost --env development validate-config
+
+# 設定内容を Secret 秘匿付きで確認する
+spautopost show-config
+
+# dry-run は既定で有効（true の間は SharePoint へ投稿しない）。明示切替も可能:
+spautopost --dry-run validate-config
+spautopost --no-dry-run validate-config   # publish は人間ゲート対象
+```
+
+検証コマンド（lint / type / test）:
+
+```sh
+ruff check . && ruff format --check src tests
+mypy src
+pytest --cov=spautopost --cov-report=term-missing   # カバレッジ 80% 以上を要求
+```
+
 ## 権威順位
 
 仕様や判断が競合した場合の優先順位は次のとおりです。

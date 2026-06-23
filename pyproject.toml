@@ -1,8 +1,29 @@
-# SPAutoPost ツーリング設定（Python MVP core）。
-# アプリのパッケージング（[project] / [build-system]）は、最初の Issue 駆動の
-# コード変更時に追加する。現段階ではツール設定のみを保持する。
+# SPAutoPost パッケージング/ツーリング設定（Python MVP core）。
 # 採用ツール: ruff(lint+format) / black / mypy / pytest(+coverage)。
 # 根拠: docs/decisions/2026-06-22-mvp-runtime-and-language.md, .claude/rules/ecc/python/
+#       openspec/changes/issue-4-initialize-application-skeleton/
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "spautopost"
+version = "0.0.1"
+description = "SharePoint security-advisory auto-posting tool (MVP core)"
+readme = "README.md"
+requires-python = ">=3.12"
+# ランタイム依存は最小化（YAML 設定のみ）。validation は stdlib で実装する。
+dependencies = ["pyyaml>=6.0"]
+
+[project.optional-dependencies]
+dev = ["ruff", "mypy", "pytest", "pytest-cov", "types-pyyaml"]
+
+[project.scripts]
+spautopost = "spautopost.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/spautopost"]
 
 [tool.ruff]
 line-length = 100

@@ -1,0 +1,50 @@
+# SPAutoPost 設定サンプル。
+# 使い方: 本ファイルを config/default.yml 等にコピーし、環境ごとに調整する。
+# Secret は値を直書きせず、必ず env:NAME 参照のみを書く（config/*.yml は gitignore 対象）。
+# 正本: docs/specs/configuration.md
+
+app:
+  environment: development # development | test | production
+  dry_run: true # 既定 true。true の間は SharePoint へ投稿しない
+  log_level: info
+
+server:
+  admin_ui_enabled: true
+  admin_api_enabled: true
+  auth_provider: entra_id
+
+storage:
+  provider: sqlite # postgresql | sqlite（hosted は postgresql、local/test は sqlite）
+  database_url: env:SPAUTOPOST_DATABASE_URL
+  sqlite_path: ./data/spautopost.dev.sqlite3
+
+llm:
+  provider: mock # mock | azure_openai | generic | test_manual
+  prompt_version: v1
+
+sharepoint:
+  mode: site-page # site-page | list
+  default_draft: true
+  allow_publish: false # true にする場合 security.require_approval も true が必要
+  tenant_id: env:SPAUTOPOST_TENANT_ID
+  site_id: env:SPAUTOPOST_SHAREPOINT_SITE_ID
+  page_library_id: env:SPAUTOPOST_SHAREPOINT_PAGE_LIBRARY_ID
+
+sources:
+  manual:
+    enabled: true
+    input_dir: ./samples/advisories
+  nvd:
+    enabled: false
+    api_key: env:SPAUTOPOST_NVD_API_KEY
+  myjvn:
+    enabled: false
+
+graph:
+  local_poc_auth: delegated
+  hosted_auth: undecided
+
+security:
+  block_auto_publish: true
+  require_approval: true
+  redact_secrets_in_logs: true
