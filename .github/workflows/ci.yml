@@ -16,25 +16,9 @@ jobs:
   python:
     name: Python checks
     runs-on: ubuntu-latest
-    # PostgreSQL backend の contract suite を実 DB で検証するためのサービス。
-    services:
-      postgres:
-        image: postgres:16
-        env:
-          POSTGRES_USER: spautopost
-          POSTGRES_PASSWORD: spautopost
-          POSTGRES_DB: spautopost_test
-        ports:
-          - 5432:5432
-        # 接続可能になるまで待機（DB 準備前のテスト失敗を防ぐ）。
-        options: >-
-          --health-cmd "pg_isready -U spautopost"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-    env:
-      # contract suite の PostgreSQL backend を有効化する（未設定時は skip）。
-      SPAUTOPOST_TEST_DATABASE_URL: postgresql://spautopost:spautopost@localhost:5432/spautopost_test
+    # 予算節約のため CI は SQLite backend 中心で実行する。PostgreSQL backend の
+    # contract suite は SPAUTOPOST_TEST_DATABASE_URL が設定されたとき (ローカル or
+    # 別途 PG service を足したワークフロー) のみ実行され、未設定の本ジョブでは skip される。
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -44,8 +28,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           if [ -d src ]; then
-            # postgres extra を含め、両 backend の contract suite を CI で実行する。
-            pip install -e ".[dev,postgres]"
+            pip install -e ".[dev]"
           else
             pip install ruff mypy pytest pytest-cov
           fi
@@ -60,7 +43,7 @@ jobs:
           else
             echo "src/ が無いため mypy をスキップ"
           fi
-      - name: Pytest + coverage (src 存在時のみ、sqlite + postgres 両 backend)
+      - name: Pytest + coverage (src 存在時のみ、sqlite。postgres は DATABASE_URL 設定時のみ)
         run: |
           if [ -d src ]; then
             python -m pytest --cov=src --cov-report=term-missing
