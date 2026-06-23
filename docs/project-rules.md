@@ -107,6 +107,8 @@ PR には次を明記します。
 
 PR は Issue の完了条件を満たして初めて完了とします。
 
+マルチエージェント運用での PR の進め方（auto-merge ゲートと人間エスカレーション条件）は `docs/runbooks/multi-agent-orchestration.md`「自律度と人間ゲート」に従います。
+
 ## 8. 変更管理
 
 仕様変更、スコープ変更、設計判断の変更は、GitHub 上に記録します。
@@ -146,3 +148,5 @@ Claude Code / Codex は、実装者として次を守ります。
 - 不明点を推測で埋めず、Issue 更新を要求する。
 
 AI 実装エージェントは、仕様決定者ではありません。仕様の追加・変更は GitHub 上の正本に反映されたものだけを有効とします。
+
+複数エージェントを Orca worktree で並列運用する場合は、`AGENTS.md`「自律マルチエージェント運用」と `docs/runbooks/multi-agent-orchestration.md` に従い、agmsg（team=spautopost）で協調し、auto-merge の carve-out（仕様不足・認証/認可/Secret/投稿・Spec 差分・CI 未整備など）では人間ゲートを通します。

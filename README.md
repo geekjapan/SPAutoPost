@@ -47,6 +47,8 @@ SharePoint への掲載方式は、SharePoint Site Page / News article 形式を
 - [docs/runbooks/operation.md](./docs/runbooks/operation.md): 運用 runbook
 - [docs/runbooks/security-review.md](./docs/runbooks/security-review.md): セキュリティレビュー runbook
 - [docs/runbooks/incident-response.md](./docs/runbooks/incident-response.md): インシデント対応 runbook
+- [docs/runbooks/multi-agent-orchestration.md](./docs/runbooks/multi-agent-orchestration.md): Orca + ECC + OpenSpec + agmsg による自律マルチエージェント運用 runbook
+- [orca.yaml](./orca.yaml): Orca worktree スクリプト設定（setup / issueCommand / archive）
 
 ## 権威順位
 
