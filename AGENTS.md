@@ -107,6 +107,39 @@ PR には最低限、次を含めてください。
 - 仕様差分の有無
 - セキュリティ上の注意点
 
+## 自律マルチエージェント運用（Orca + ECC + OpenSpec + agmsg）
+
+このリポジトリは Orca（`stablyai/orca`）をマルチエージェントオーケストレータとして運用する。詳細手順は `docs/runbooks/multi-agent-orchestration.md` を正とし、ここでは要点のみ示す。
+
+### 実行モデル
+
+- **1 Issue = 1 Orca worktree = 1 OpenSpec change** を基本単位とする。worktree ごとに Claude Code / Codex（必要に応じ OpenCode / Pi）を起動する。
+- worktree 起動時のスクリプトは `orca.yaml`（`scripts.setup` / `issueCommand` / `archive`）で共有する。
+- 設計難度が高い change は同一 Issue を複数エージェントに並列で当て、diff を比較して優位案をマージしてよい（採否理由を PR/Issue に残す）。
+
+### agmsg 協調
+
+- チームは `spautopost`。各 worktree のエージェントは固有名で参加する。
+- 共有ファイル（この `AGENTS.md` / `docs/specs/` / data-model 等）へ影響する変更の着手前、依存・ブロック発生時、Spec 差分発生時は agmsg で他エージェントへ通知する。
+- 合意・決定はチャットに留めず、Issue / Spec / `docs/decisions/` に反映する（チャットは正本ではない）。
+
+### スキル起動（ハーネス別）
+
+- Claude Code: 計画 `ecc:plan`、仕様化 `opsx:propose`/`opsx:ff`、事前ゲート `self-grill-across-multi-propose`、実装 `tdd`、レビュー `ecc:code-review`、セキュリティ `ecc:security-review`、適用 `opsx:apply`。規約は `.claude/rules/ecc/`。
+- Codex: `AGENTS.md` をネイティブに読む。OpenSpec は `.codex/skills`、agmsg 受信は `.codex/hooks.json`（Stop フック）。事前ゲート・レビュー・セキュリティは本ファイルと runbook のチェックリストに準拠する。
+
+### 自律度と人間ゲート
+
+既定の自律度は **高（merge まで自動）**。CI がグリーンで、かつ次の carve-out に該当しない change は PR から merge まで自動で進めてよい。**投稿（publish）は常に人間承認**。
+
+auto-merge せず必ず人間にエスカレーションする条件:
+
+- 「仕様不足時の扱い」に該当する仕様不足。
+- 認証 / 認可 / Secret / 投稿（publish）に触れる変更。
+- 権威順位の競合、または Spec 差分を伴う変更。
+- セキュリティ・法務判断が必要なもの。
+- **CI 未整備の間は auto-merge せず、PR 作成 → 人間 merge にフォールバックする**（現状 `src/`・CI 未作成）。
+
 ## エージェント設定ファイルの扱い
 
 - このファイル（`AGENTS.md`）が repo workflow の単一正本。`CLAUDE.md` は Claude Code 用の薄い adapter として追従させる。workflow / 権威順位 / Issue・OpenSpec 方針を変える場合は、まず `AGENTS.md` を更新し、`CLAUDE.md` には差分要約または参照だけを置く。
