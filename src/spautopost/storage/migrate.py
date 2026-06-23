@@ -22,6 +22,7 @@
 from __future__ import annotations
 
 import hashlib
+from collections.abc import Mapping
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Protocol
@@ -92,7 +93,15 @@ def _applied_checksums(conn: _DBAPIConnection) -> dict[str, str]:
     """ledger 済みの {version: checksum} を返す。"""
     cur = conn.cursor()
     cur.execute("SELECT version, checksum FROM schema_migrations")
-    return {row[0]: row[1] for row in cur.fetchall()}
+    # row factory に非依存にする: psycopg(dict_row) は Mapping、sqlite3.Row や
+    # 素の tuple は位置アクセス。両形態を吸収する。
+    result: dict[str, str] = {}
+    for row in cur.fetchall():
+        if isinstance(row, Mapping):
+            result[row["version"]] = row["checksum"]
+        else:
+            result[row[0]] = row[1]
+    return result
 
 
 def _execute_sql_script(cur: Any, sql: str) -> None:
