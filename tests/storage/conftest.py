@@ -38,10 +38,20 @@ def _build_sqlite_backend(tmp_path: Path) -> StoragePort:
     return port
 
 
-def _build_postgres_backend(tmp_path: Path) -> StoragePort:
-    """PostgreSQL backend の factory（CI でのみ実行、Block 9 で本実装）。"""
-    import os
+# PG はテスト間で同一 DB を再利用するため、各テスト前にデータを掃除する
+# (SQLite は tmp ファイルで自然に分離される)。schema_migrations は残す。
+_PG_DATA_TABLES = (
+    "source_records",
+    "advisories",
+    "draft_posts",
+    "review_events",
+    "publications",
+    "audit_events",
+)
 
+
+def _build_postgres_backend(tmp_path: Path) -> StoragePort:
+    """PostgreSQL backend の factory（CI でのみ実行）。テスト分離のため毎回 TRUNCATE。"""
     from spautopost.config import StorageConfig
     from spautopost.storage.factory import build_storage
 
@@ -50,6 +60,12 @@ def _build_postgres_backend(tmp_path: Path) -> StoragePort:
         StorageConfig(provider="postgresql", database_url=database_url, sqlite_path=None)
     )
     port.migrate()
+    conn = port._conn  # type: ignore[attr-defined]  # テスト分離のための掃除
+    with conn.cursor() as cur:
+        cur.execute(
+            "TRUNCATE " + ", ".join(_PG_DATA_TABLES) + " RESTART IDENTITY CASCADE"  # noqa: S608
+        )
+    conn.commit()
     return port
 
 
