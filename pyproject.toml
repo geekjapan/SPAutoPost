@@ -1,0 +1,41 @@
+# SPAutoPost ツーリング設定（Python MVP core）。
+# アプリのパッケージング（[project] / [build-system]）は、最初の Issue 駆動の
+# コード変更時に追加する。現段階ではツール設定のみを保持する。
+# 採用ツール: ruff(lint+format) / black / mypy / pytest(+coverage)。
+# 根拠: docs/decisions/2026-06-22-mvp-runtime-and-language.md, .claude/rules/ecc/python/
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+# E/F=pyflakes・pycodestyle, I=isort, B=bugbear, UP=pyupgrade, S=flake8-bandit(security)
+select = ["E", "F", "I", "B", "UP", "S"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101"]  # テストでの assert を許可
+
+[tool.black]
+line-length = 100
+target-version = ["py312"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+addopts = "-q"
+testpaths = ["tests"]
+markers = [
+  "unit: unit tests",
+  "integration: integration tests",
+]
+
+[tool.coverage.run]
+source = ["src"]
+
+[tool.coverage.report]
+fail_under = 80
+show_missing = true
