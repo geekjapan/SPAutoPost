@@ -79,6 +79,16 @@ spautopost --dry-run validate-config
 spautopost --no-dry-run validate-config   # publish は人間ゲート対象
 ```
 
+### 手動 advisory 入力
+
+YAML / JSON の手動入力を検証し、既存の Advisory model へ正規化した preview を確認できます。
+このコマンドは外部 API 呼び出し、SharePoint 投稿、永続化を行いません。
+
+```sh
+spautopost --dry-run import-advisory samples/advisories/manual-cve.yaml
+spautopost --dry-run import-advisory samples/advisories/manual-advisory.json
+```
+
 ## ストレージとマイグレーション
 
 ストレージは ORM 非依存の repository ポート（`StoragePort`）越しに使用します。

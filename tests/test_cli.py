@@ -128,3 +128,55 @@ def test_migrate_applies_then_reports_no_pending(
     out2 = capsys.readouterr().out
     assert code2 == 0
     assert "no pending migrations (sqlite)" in out2
+
+
+def test_import_advisory_dry_run_preview(
+    config_dir: Path,
+    valid_environ: dict[str, str],
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    _set_env(monkeypatch, valid_environ)
+    input_file = tmp_path / "advisory.yaml"
+    input_file.write_text(
+        """
+title: Test advisory
+summary: Test summary.
+severity: medium
+urgency: normal
+references:
+  - label: Vendor
+    url: https://example.com/advisory
+    type: vendor
+""",
+        encoding="utf-8",
+    )
+
+    code = main(["--config-dir", str(config_dir), "--dry-run", "import-advisory", str(input_file)])
+
+    out = capsys.readouterr().out
+    assert code == 0
+    assert '"dry_run": true' in out
+    assert '"title": "Test advisory"' in out
+    assert '"urgency": "normal"' in out
+
+
+def test_import_advisory_invalid_input_returns_three(
+    config_dir: Path,
+    valid_environ: dict[str, str],
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    _set_env(monkeypatch, valid_environ)
+    input_file = tmp_path / "invalid.yaml"
+    input_file.write_text("title: only title\n", encoding="utf-8")
+
+    code = main(["--config-dir", str(config_dir), "--dry-run", "import-advisory", str(input_file)])
+
+    assert code == 3
+    err = capsys.readouterr().err
+    assert "advisory input validation failed" in err
+    assert "summary is required" in err
+    assert "references is required" in err

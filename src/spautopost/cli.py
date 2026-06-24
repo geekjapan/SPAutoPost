@@ -7,14 +7,19 @@
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import sys
 from collections.abc import Sequence
+from dataclasses import asdict
+from datetime import datetime
 from pathlib import Path
+from typing import Any
 
 import yaml
 
 from . import __version__
+from .advisory_input import AdvisoryInputError, ManualAdvisoryInput, load_manual_advisory
 from .config import Config, load_and_validate
 from .errors import ConfigValidationError
 from .secrets import redact_config
@@ -25,6 +30,7 @@ DEFAULT_ENV = "development"
 EXIT_OK = 0
 EXIT_RUNTIME_ERROR = 1
 EXIT_CONFIG_INVALID = 2
+EXIT_INPUT_INVALID = 3
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -66,6 +72,11 @@ def build_parser() -> argparse.ArgumentParser:
         "migrate",
         help="アクティブ provider の baseline migration を適用する（--dry-run で未適用一覧のみ）",
     )
+    import_advisory = sub.add_parser(
+        "import-advisory",
+        help="YAML / JSON の手動 advisory を検証し normalized preview を表示する",
+    )
+    import_advisory.add_argument("input_file", type=Path, help="manual advisory YAML / JSON file")
     return parser
 
 
@@ -87,10 +98,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(f"config not found: {exc}", file=sys.stderr)
         return EXIT_RUNTIME_ERROR
     effective_dry_run = config.app.dry_run if args.dry_run is None else args.dry_run
-    return _dispatch(args.command, config, effective_dry_run)
+    return _dispatch(args, config, effective_dry_run)
 
 
-def _dispatch(command: str, config: Config, dry_run: bool) -> int:
+def _dispatch(args: argparse.Namespace, config: Config, dry_run: bool) -> int:
+    command = args.command
     if command == "validate-config":
         print(f"OK: config valid (environment={config.app.environment}, dry_run={dry_run})")
         return EXIT_OK
@@ -102,8 +114,44 @@ def _dispatch(command: str, config: Config, dry_run: bool) -> int:
         return EXIT_OK
     if command == "migrate":
         return _run_migrate(config, dry_run)
+    if command == "import-advisory":
+        return _run_import_advisory(args.input_file, dry_run)
     print(f"unknown command: {command}", file=sys.stderr)  # pragma: no cover
     return EXIT_RUNTIME_ERROR  # pragma: no cover
+
+
+def _run_import_advisory(input_file: Path, dry_run: bool) -> int:
+    try:
+        loaded = load_manual_advisory(input_file)
+    except FileNotFoundError:
+        print(f"advisory input not found: {input_file}", file=sys.stderr)
+        return EXIT_RUNTIME_ERROR
+    except AdvisoryInputError as exc:
+        print("advisory input validation failed:", file=sys.stderr)
+        for issue in exc.issues:
+            print(f"  - {issue}", file=sys.stderr)
+        return EXIT_INPUT_INVALID
+
+    print(json.dumps(_manual_advisory_preview(loaded, dry_run), ensure_ascii=False, indent=2))
+    return EXIT_OK
+
+
+def _manual_advisory_preview(loaded: ManualAdvisoryInput, dry_run: bool) -> dict[str, Any]:
+    advisory = _json_ready(asdict(loaded.advisory))
+    preview: dict[str, Any] = {"dry_run": dry_run, "advisory": advisory}
+    if loaded.urgency is not None:
+        preview["urgency"] = loaded.urgency
+    return preview
+
+
+def _json_ready(value: Any) -> Any:
+    if isinstance(value, datetime):
+        return value.isoformat()
+    if isinstance(value, dict):
+        return {key: _json_ready(item) for key, item in value.items()}
+    if isinstance(value, list | tuple):
+        return [_json_ready(item) for item in value]
+    return value
 
 
 def _run_migrate(config: Config, dry_run: bool) -> int:
