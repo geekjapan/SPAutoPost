@@ -50,7 +50,7 @@ storage:
   sqlite_path: ./data/spautopost.dev.sqlite3
 
 llm:
-  provider: mock
+  provider: test_mock # production_api | production_flow | generic_api | test_mock | test_manual
   prompt_version: v1
 
 sharepoint:
