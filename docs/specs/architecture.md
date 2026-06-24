@@ -157,7 +157,7 @@ Scheduled Job / Manual Import
 - approve / reject / request regeneration を `AdminCommand` として enqueue する
 - publish request を `AdminCommand` として enqueue する
 - AuditEvent を参照する
-- DraftPost の状態機械、ReviewEvent / AuditEvent 記録、publish 処理は Python core が所有する
+- DraftPost の状態機械、ReviewEvent / AuditEvent 記録、publish 処理は直接実行しない
 
 ### Python CLI / Batch
 

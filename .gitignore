@@ -18,5 +18,9 @@ dist/
 htmlcov/
 coverage.xml
 
+# Node / TypeScript admin API
+node_modules/
+/admin-api/dist/
+
 # ローカルデータ
 /data/
