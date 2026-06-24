@@ -328,9 +328,9 @@ Unresolved Items Tracking で満たす。binding な不変条件は OpenSpec cap
 - #10 Implement dry-run preview and minimal audit log
 - #21 Add scheduler and external collector import boundary
 - #23 Review and finalize detailed design documents
+- #25 Add Azure Container Apps deployment skeleton
 - #26 Define minimal admin review API and UI boundary
 - #27 Decide Microsoft Graph authentication model
-- #25 Add Azure Container Apps deployment skeleton
 - #28 Implement PostgreSQL storage and migration baseline
 - #29 Implement Entra ID login for Admin API/UI
 - #30 Add Azure Log Analytics integration
