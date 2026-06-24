@@ -89,7 +89,7 @@ Codex に固定せず、Orca 上の multi-runtime worker pool として扱う。
 - hooks は事前確認済みのものだけを承認済みとして扱う。Secret や外部 publish につながる hook / tool は carve-out として人間 gate に回す。
 - 同一 Issue の fan-out では、各 candidate worktree の採否理由、落とした案、採用差分を PR または Issue に残す。
 - PR 前 review は、実装 worker とは別 runtime に投げることを推奨する。狭い修正なら同じ runtime の fresh terminal でもよい。
-- Claude Code 実装 worker も OpenSpec-first で起動する。Issue 正本確認後に `opsx:propose` / `opsx:ff` で change を作成・更新し、`openspec validate <change-id> --strict` を通してから実装へ進む。
+- Claude Code 実装 worker も OpenSpec-first で起動する。Issue 正本確認後に `opsx:propose` / `opsx:ff` で change を作成・更新し、`openspec validate <change-id> --strict`、事前ゲートを経て、`opsx:apply` の中で TDD 手順により実装する。`ecc:*` はこの後段の計画・レビュー・修正用に限定し、OpenSpec change 未作成・未検証のまま実装しない。
 
 ### Worker 起動の安定パターン
 
@@ -103,6 +103,15 @@ Codex に固定せず、Orca 上の multi-runtime worker pool として扱う。
 6. worker は prompt file 内の `worker_done` / `decision_gate` / `escalation` コマンドだけで coordinator と通信する。
 
 `--inject` は短い手動 review prompt など、送信状態を terminal read で確認できる場合に限って使う。
+
+Claude worker の prompt file には次の順序を明記する:
+
+1. GitHub Issue / Milestone / 関連 Spec を正本として確認する。
+2. 対応 OpenSpec change を `opsx:propose` / `opsx:ff` で作成または更新する。
+3. `openspec validate <change-id> --strict` を通す。
+4. `self-grill-across-multi-propose` で依存・競合・carve-out を確認する。
+5. `opsx:apply` の中で TDD 実装し、必要に応じて `ecc:*` 手順（計画・レビュー等）を使う。
+6. PR には Issue / Milestone / OpenSpec change / 検証結果 / 仕様差分 / セキュリティ注意点を記録する。
 
 ## 3. agmsg 協調プレイブック
 
@@ -121,11 +130,11 @@ Codex に固定せず、Orca 上の multi-runtime worker pool として扱う。
 | 計画 | `ecc:plan` / `ecc:planner` agent | AGENTS.md + 手動計画 |
 | 仕様化 | `opsx:propose` / `opsx:ff`（実装前に必須） | `openspec-propose`（`.codex/skills`） |
 | 事前ゲート | `self-grill-across-multi-propose` | 同等の自己レビュー（チェックリスト） |
-| 実装 | `tdd` / `ecc:feature-dev` | TDD 手順を AGENTS.md 準拠で実施 |
+| 実装 | `opsx:apply`（TDD 手順） / `ecc:feature-dev` | TDD 手順を AGENTS.md 準拠で実施 |
 | レビュー | `ecc:code-review` / `code-reviewer` agent | `code-review`（差分レビュー） |
 | セキュリティ | `ecc:security-review` / `security-reviewer` agent | security-review runbook 準拠 |
 | デバッグ | `diagnosing-bugs` | 同等の調査ループ |
-| 適用/同期 | `opsx:apply` / `opsx:sync` / `opsx:archive` | `openspec-apply-change` 他 |
+| 同期/完了 | `opsx:sync` / `opsx:archive` | `openspec-apply-change` 他 |
 
 - ルール（規約・チェックリスト）は `.claude/rules/ecc/`（common + python + typescript + web）。
 - `paths:` グロブにより、`**/*.py` 等の実コードに自動適用される。

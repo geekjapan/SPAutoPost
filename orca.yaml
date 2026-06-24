@@ -29,8 +29,9 @@ scripts:
     echo "[orca:issue] linked issue: ${ORCA_ISSUE_FIELDS:-<none>}"
     echo "[orca:issue] 仕様駆動ループの開始手順:"
     echo "  1) Issue の 目的 / 受け入れ条件 / 関連 Spec / 非対象 を確認（不足なら停止し Issue 更新を要求）"
-    echo "  2) OpenSpec change を作成: opsx:propose（change ID = issue-<番号>-<kebab>）"
-    echo "  3) 事前ゲート: self-grill-across-multi-propose → 実装(tdd) → 検証(code-review/security-review) → PR"
+    echo "  2) OpenSpec change を作成/更新: Claude は必ず opsx:propose/opsx:ff を実装前に実行、Codex は openspec-*（change ID = issue-<番号>-<kebab>）"
+    echo "  3) OpenSpec の検証: openspec validate <change-id> --strict を実行してパスさせる"
+    echo "  4) Claude の ecc:* は OpenSpec 後段で使用: self-grill-across-multi-propose → opsx:apply（TDD 手順）→ code-review/security-review → PR"
     echo "  詳細: docs/runbooks/multi-agent-orchestration.md / docs/openspec-workflow.md"
   archive: |
     echo "[orca:archive] worktree ${ORCA_WORKSPACE_NAME:-?} を撤去します。"

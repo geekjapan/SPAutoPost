@@ -22,13 +22,17 @@ Proposed
 
 ## SourceAdapter Interface
 
-推奨 interface:
+実装上の共通 interface:
 
 ```text
-SourceAdapter.validateConfig(config) -> AdapterStatus
-SourceAdapter.fetch(query) -> SourceRecord[]
-SourceAdapter.normalize(record) -> Advisory[]
+SourceAdapter.validate_config() -> AdapterStatus
+SourceAdapter.fetch(query) -> SourceDocument[]
+SourceAdapter.normalize(document) -> Advisory[]
 ```
+
+`SourceDocument` は `SourceRecord` と raw payload を束ねる一時 DTO です。`SourceRecord`
+は取得元、取得時刻、source URL、raw hash、parser version を保持し、raw payload
+そのものは storage DTO に直接入れません。
 
 query 例:
 
@@ -41,6 +45,14 @@ query 例:
 - modified_from
 - modified_to
 - severity
+
+責務境界:
+
+- adapter は fetch / parse / normalize を担当し、storage への保存は呼び出し側が行う。
+- fixture adapter は外部通信を行わず、下流 Issue の adapter 実装と test data の契約を固定する。
+- live network client、API key、rate limit retry、crawler 本体は source-specific Issue で扱う。
+- `SourceRecord.raw_hash` は raw payload の deterministic JSON hash とする。
+- `Advisory.tags` は schema 変更なしに KEV status、source confidence、vendor/product hint を伝える補助 metadata として使う。
 
 ## Manual Source
 
@@ -136,6 +148,12 @@ MVP では手動入力を必須とします。
 - action / mitigation if available
 - source URL
 
+fixture 正規化では、CISA KEV catalog の JSON/CSV 由来の代表 field
+（`cveID`, `vendorProject`, `product`, `vulnerabilityName`, `dateAdded`,
+`shortDescription`, `requiredAction`, `dueDate`, `knownRansomwareCampaignUse`）
+を `Advisory` に写像する。KEV status は `references[].type = "kev"` と
+`tags = ("kev", "known-exploited", ...)` で表現し、storage schema は変更しない。
+
 ## Vendor Advisory / RSS Adapter
 
 目的:
@@ -147,6 +165,10 @@ MVP では手動入力を必須とします。
 - まず adapter interface と fixture を作る。
 - 個別 vendor adapter は必要に応じて追加する。
 - RSS/Atom は title / URL / published_at / summary を SourceRecord 化する。
+- vendor advisory fixture は vendor advisory ID、CVE ID、severity、source URL を
+  `Advisory.vendor_advisory_ids` / `Advisory.cve_ids` / `Advisory.references` に正規化する。
+- RSS/feed fixture は live crawler ではなく、title / URL / summary / published_at /
+  CVE ID を受け取る skeleton として扱う。
 
 ## External Collector Import
 
