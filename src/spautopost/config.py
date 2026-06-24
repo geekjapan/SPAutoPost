@@ -18,7 +18,9 @@ from .secrets import iter_secret_refs
 
 ENVIRONMENTS = frozenset({"development", "test", "production"})
 STORAGE_PROVIDERS = frozenset({"postgresql", "sqlite"})
-LLM_PROVIDERS = frozenset({"mock", "azure_openai", "generic", "test_manual"})
+LLM_PROVIDERS = frozenset(
+    {"production_api", "production_flow", "generic_api", "test_mock", "test_manual"}
+)
 SHAREPOINT_MODES = frozenset({"site-page", "list"})
 
 _SECTION_KEYS: dict[str, frozenset[str]] = {

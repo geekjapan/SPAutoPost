@@ -19,11 +19,21 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
+from typing import TypedDict
 
 # プロジェクトルート (tests/storage/ から 2 つ上)。
 _ROOT = Path(__file__).resolve().parents[2]
 _POSTGRES_SQL = _ROOT / "db" / "migrations" / "postgres" / "0001_baseline.sql"
 _SQLITE_SQL = _ROOT / "db" / "migrations" / "sqlite" / "0001_baseline.sql"
+
+
+class ParsedSchema(TypedDict):
+    tables: set[str]
+    columns: dict[str, set[str]]
+    check_enums: dict[tuple[str, str], frozenset[str]]
+    foreign_keys: set[tuple[str, str, str, str]]
+    unique_indexes: set[tuple[str, str, str]]
+    all_indexes: set[tuple[str, str, str]]
 
 
 def _strip_line_comments(sql: str) -> str:
@@ -155,7 +165,7 @@ def _all_indexes_of(sql: str) -> set[tuple[str, str, str]]:
     return indexes
 
 
-def _parse(path: Path) -> dict[str, object]:
+def _parse(path: Path) -> ParsedSchema:
     sql = _strip_line_comments(path.read_text(encoding="utf-8"))
     tables = _parse_create_tables(sql)
     columns = {t: _columns_of(body) for t, body in tables.items()}
@@ -208,7 +218,7 @@ def test_check_enum_sets_are_equal() -> None:
 
 def test_audit_event_type_has_15_values() -> None:
     pg = _parse(_POSTGRES_SQL)["check_enums"]
-    enum = pg[("audit_events", "event_type")]  # type: ignore[index]
+    enum = pg[("audit_events", "event_type")]
     assert len(enum) == 15
 
 
@@ -226,7 +236,7 @@ def test_unique_index_sets_are_equal() -> None:
         "ux_publications_idempotency_key",
         "publications",
         "idempotency_key",
-    ) in pg  # type: ignore[operator]
+    ) in pg
 
 
 def test_index_sets_are_equal_across_dialects() -> None:
@@ -240,8 +250,8 @@ def test_all_foreign_keys_have_supporting_index() -> None:
     parsed = _parse(_POSTGRES_SQL)
     foreign_keys = parsed["foreign_keys"]
     indexes = parsed["all_indexes"]
-    indexed_cols = {(table, cols) for _name, table, cols in indexes}  # type: ignore[misc]
-    for child_table, child_col, _parent_table, _parent_col in foreign_keys:  # type: ignore[misc]
+    indexed_cols = {(table, cols) for _name, table, cols in indexes}
+    for child_table, child_col, _parent_table, _parent_col in foreign_keys:
         assert (child_table, child_col) in indexed_cols, (
             f"FK {child_table}.{child_col} に対応するインデックスが無い"
         )

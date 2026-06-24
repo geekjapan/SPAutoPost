@@ -18,7 +18,7 @@ storage:
   sqlite_path: ./data/spautopost.dev.sqlite3
 
 llm:
-  provider: mock
+  provider: test_mock
   prompt_version: v1
 
 sharepoint:
