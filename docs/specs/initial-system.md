@@ -46,6 +46,10 @@ Source Input / Collector
 
 ## Core Data Models
 
+> **正本について（Issue #3）**
+> コアデータモデルの正本は [`data-model.md`](./data-model.md) と OpenSpec capability `data-model`。
+> 本節は概要レベルの旧表記であり、`Advisory` の出典表現は `source_refs: SourceRef[]`（data-model.md）が正本（下記の `source_*` フラットフィールドは概要表記）。`AuditEvent`・`SourceRecord`・`ReviewEvent`・idempotency_key・provider provenance を含む完全な定義は data-model.md を参照すること。
+
 ### Advisory
 
 脆弱性またはセキュリティ注意喚起を表す正規化データです。
