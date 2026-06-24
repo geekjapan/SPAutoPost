@@ -13,4 +13,4 @@
 
 - [x] 3.1 `openspec validate --changes --strict` を通す
 - [x] 3.2 `git diff --check` で whitespace 異常がないことを確認する
-- [ ] 3.3 PR を作成する（Closes #24、M0、OpenSpec change ID、verification、security notes）
+- [x] 3.3 PR を作成する（Closes #24、M0、OpenSpec change ID、verification、security notes）
