@@ -2,7 +2,7 @@
 
 ### Requirement: M0 Accepted document set is identified
 
-詳細設計文書レビュー（Issue #23）は、M0 で Accepted とする文書集合を中央レビューマトリクスで特定しなければならない（SHALL）。M0 Accepted 集合には、人間ゲート判断を要さず foundational に確定済みの文書のみを含める。最低限 `docs/specs/sharepoint-publishing.md`（MVP publishing mode）、`docs/specs/data-model.md`、`docs/specs/configuration.md`、`docs/decisions/2026-06-22-sharepoint-list-vs-site-page.md` を M0 Accepted として特定し、`docs/design-documents.md` の Status を整合させなければならない（SHALL）。認証・Secret・投稿・LLM 契約に依存する文書を、その判断を担う Issue が未決のまま M0 Accepted に flip してはならない（SHALL NOT）。
+詳細設計文書レビュー（Issue #23）は、M0 で Accepted とする文書集合を中央レビューマトリクスで特定しなければならない（SHALL）。M0 Accepted 集合には、その core 判断が既に確定済み（Accepted ADR または merge/archive 済み OpenSpec change が裏付け）で人間ゲート判断を要さない文書のみを含める。最低限 `docs/specs/sharepoint-publishing.md`（publishing mode は Accepted ADR `2026-06-22-sharepoint-list-vs-site-page.md` で確定済み。残る詳細は #2 に route）、`docs/specs/data-model.md`（#3）、`docs/specs/configuration.md`（#4）、`docs/decisions/2026-06-22-sharepoint-list-vs-site-page.md` を M0 Accepted として特定し、`docs/design-documents.md` の Status を整合させなければならない（SHALL）。core 判断が未決の所有 Issue に依存する文書（例: security/secrets/audit baseline=#5、LLM provider 戦略=#15、Graph auth model=#27）を、その Issue が未決のまま M0 Accepted に flip してはならない（SHALL NOT）。
 
 #### Scenario: M0 Accepted 文書を中央マトリクスから特定する
 - **WHEN** どの設計文書が M0 で Accepted かを確認する
