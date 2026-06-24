@@ -195,6 +195,41 @@ mypy src
 pytest --cov=spautopost --cov-report=term-missing   # カバレッジ 80% 以上を要求
 ```
 
+## Azure 想定実行（hosted skeleton）
+
+運用コアは利用者端末ではなく Azure Container Apps / Container Apps Jobs 側に置く方針です
+（`docs/specs/deployment.md`）。Issue #25 で最小の deployment skeleton を追加しました。
+詳細と job 名のマッピングは [deploy/README.md](./deploy/README.md) を参照。
+
+local 実行と Azure 想定実行の違い:
+
+| | local | Azure（hosted, 想定） |
+|--|-------|----------------------|
+| 実行 | `spautopost <command>` を端末で実行 | Container Apps Jobs が image を起動し `spautopost-job <job-name>` を実行 |
+| 設定 | `config/default.yml`（`config.example.yml` 由来）を基底に任意の `config/<env>.yml` を overlay | image の `config/default.yml`（`deploy/config.hosted.example.yml`, production / postgresql） |
+| Secret | 端末の環境変数 | Container Apps secret ref → 環境変数として注入（`deploy/hosted.env.example` 参照） |
+| publish | 既定 dry-run。publish は人間ゲート | 同左。`publish-approved` job は publish しない guarded stub |
+
+scheduled job の skeleton（`spautopost-job <job-name>`）:
+
+| job 名 | 解決される CLI command |
+|--------|------------------------|
+| `dry-run` | `spautopost --dry-run validate-config` |
+| `collect` | `spautopost --dry-run run-sample-source-job` |
+| `generate` | `spautopost --dry-run run-sample-source-job`（M1 は collect と同 pipeline） |
+| `publish-approved` | guarded stub（CLI を呼ばず exit 4。常に人間ゲート） |
+
+```sh
+# image build（build context は repo root）
+docker build -f deploy/Dockerfile.core -t spautopost-core .
+# job 実行（Container Apps Jobs は args に job 名を渡す）
+docker run --rm --env-file deploy/hosted.env.example spautopost-core dry-run
+```
+
+> 本番 Azure リソース作成・本番 Secret 登録・本格 IaC（Bicep）・deploy automation は
+> M1 非対象です。`deploy/jobs.example.yaml` は Container Apps Jobs の command / schedule /
+> secretRef 形を示す参照 skeleton で、実値は含みません。
+
 ## 権威順位
 
 仕様や判断が競合した場合の優先順位は次のとおりです。

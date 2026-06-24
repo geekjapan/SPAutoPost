@@ -15,6 +15,8 @@
 from __future__ import annotations
 
 import importlib.util
+from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -74,6 +76,48 @@ def test_postgres_rejects_cross_provider_sqlite_path() -> None:
 
     with pytest.raises(StorageConfigError, match="sqlite_path must not be set"):
         build_storage(config)
+
+
+def test_postgres_resolves_env_database_url(monkeypatch: pytest.MonkeyPatch) -> None:
+    from spautopost.storage import postgres_backend
+
+    resolved_url = "postgresql://user:secret@db.internal/spautopost"  # noqa: S105 - dummy test URL
+    captured: dict[str, Any] = {}
+    sentinel = object()
+
+    def fake_build_postgres_storage(database_url: str, *, migrations_root: Path) -> object:
+        captured["database_url"] = database_url
+        captured["migrations_root"] = migrations_root
+        return sentinel
+
+    monkeypatch.setenv("SPAUTOPOST_DATABASE_URL", resolved_url)
+    monkeypatch.setattr(postgres_backend, "build_postgres_storage", fake_build_postgres_storage)
+    config = StorageConfig(
+        provider="postgresql",
+        database_url="env:SPAUTOPOST_DATABASE_URL",
+        sqlite_path=None,
+    )
+
+    port = build_storage(config)
+
+    assert port is sentinel
+    assert captured["database_url"] == resolved_url
+
+
+def test_postgres_env_database_url_requires_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("SPAUTOPOST_DATABASE_URL", raising=False)
+    config = StorageConfig(
+        provider="postgresql",
+        database_url="env:SPAUTOPOST_DATABASE_URL",
+        sqlite_path=None,
+    )
+
+    with pytest.raises(StorageConfigError) as excinfo:
+        build_storage(config)
+
+    message = str(excinfo.value)
+    assert "SPAUTOPOST_DATABASE_URL" in message
+    assert "env:SPAUTOPOST_DATABASE_URL" not in message
 
 
 def test_unknown_provider_raises_unknown_provider_error() -> None:
