@@ -98,6 +98,10 @@ def build_parser() -> argparse.ArgumentParser:
         help="手動 advisory から原稿を生成し、投稿予定 payload と監査イベントを dry-run 表示する",
     )
     preview_draft.add_argument("input_file", type=Path, help="manual advisory YAML / JSON file")
+    sub.add_parser(
+        "run-sample-source-job",
+        help="sample source から Advisory と DraftPost を生成して保存する",
+    )
     return parser
 
 
@@ -139,6 +143,8 @@ def _dispatch(args: argparse.Namespace, config: Config, dry_run: bool) -> int:
         return _run_import_advisory(args.input_file, dry_run)
     if command == "preview-draft":
         return _run_preview_draft(args.input_file, config)
+    if command == "run-sample-source-job":
+        return _run_sample_source_job(config, dry_run)
     print(f"unknown command: {command}", file=sys.stderr)  # pragma: no cover
     return EXIT_RUNTIME_ERROR  # pragma: no cover
 
@@ -297,6 +303,44 @@ def _run_migrate(config: Config, dry_run: bool) -> int:
         return EXIT_RUNTIME_ERROR
     finally:
         storage.close()
+
+
+def _run_sample_source_job(config: Config, dry_run: bool) -> int:
+    """scheduled job skeleton: sample source を取得し DraftPost 生成まで実行する。"""
+    from .llm import LLMProviderConfigError, build_llm_provider
+    from .sample_source import run_sample_source_job
+    from .storage.errors import StorageError
+    from .storage.factory import build_storage
+
+    try:
+        storage = build_storage(config.storage)
+        provider = build_llm_provider(config.llm)
+    except (StorageError, LLMProviderConfigError) as exc:
+        print(f"sample source job init failed: {exc}", file=sys.stderr)
+        return EXIT_RUNTIME_ERROR
+
+    try:
+        storage.migrate()
+        results = run_sample_source_job(storage, provider)
+    except StorageError as exc:
+        print(f"sample source job failed: {exc}", file=sys.stderr)
+        return EXIT_RUNTIME_ERROR
+    except Exception as exc:  # noqa: BLE001 - scheduled job reports runtime failure at boundary
+        print(f"sample source job failed: {exc}", file=sys.stderr)
+        return EXIT_RUNTIME_ERROR
+    finally:
+        storage.close()
+
+    _print_preview(
+        {
+            "dry_run": dry_run,
+            "generated_count": len(results),
+            "draft_ids": [result.draft_post.draft_id for result in results],
+            "advisory_ids": [result.advisory.advisory_id for result in results],
+            "source_record_ids": [result.source_record.source_record_id for result in results],
+        }
+    )
+    return EXIT_OK
 
 
 def _apply_migrations(storage: object) -> list[str]:

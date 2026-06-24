@@ -104,6 +104,16 @@ spautopost preview-draft samples/advisories/manual-cve.yaml
 generation_input_hash / operation / result を含む監査イベント（`publish_dry_run`）が含まれます。
 生成が失敗した場合は error_code / error_message を持つ `error` イベントを表示します。
 
+### sample source job
+
+M1 の sample source job は、外部 API や crawler を呼ばずに deterministic な投稿候補を取得し、
+`SourceRecord` / `Advisory` / `DraftPost` をアクティブ storage provider へ保存します。
+`test_mock` provider で draft を生成し、SharePoint 投稿は行いません。
+
+```sh
+spautopost run-sample-source-job
+```
+
 ### Admin API skeleton（TypeScript / Node.js）
 
 M1 の Admin API skeleton は `admin-api/` にあります。DraftPost の read は PostgreSQL を直読みし、

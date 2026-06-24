@@ -130,6 +130,25 @@ def test_migrate_applies_then_reports_no_pending(
     assert "no pending migrations (sqlite)" in out2
 
 
+def test_run_sample_source_job_generates_draft(
+    config_dir: Path,
+    valid_environ: dict[str, str],
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    _set_env(monkeypatch, valid_environ)
+    _write_sqlite_config(config_dir, tmp_path / "sample-job.sqlite3")
+
+    code = main(["--config-dir", str(config_dir), "run-sample-source-job"])
+
+    out = capsys.readouterr().out
+    assert code == 0
+    assert '"generated_count": 1' in out
+    assert "draft-sample-advisory-sample-2026-0001" in out
+    assert "sample-src-" in out
+
+
 def test_import_advisory_dry_run_preview(
     config_dir: Path,
     valid_environ: dict[str, str],
