@@ -2,7 +2,9 @@
 
 ## Status
 
-Proposed
+Accepted for M0
+
+canonical な advisory / draft / publication / audit データモデルは Issue #3 の OpenSpec change で確定・merge 済み。multi-source `source_refs` の baseline 化（#28）と `event_type` enum の権威付け（`audit-log.md` 経由、#10）は将来 migration として deferred。詳細は `docs/design-documents.md` の Review & Status Matrix (Issue #23) を参照。
 
 ## Purpose
 
