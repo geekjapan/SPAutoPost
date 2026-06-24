@@ -30,7 +30,7 @@ from .dry_run import (
     build_site_page_payload,
 )
 from .errors import ConfigValidationError
-from .llm import DraftInput, LLMProviderConfigError, TargetAudience, Urgency, build_llm_provider
+from .llm import DraftInput, MockLLMProvider, TargetAudience, Urgency
 from .secrets import redact_config
 
 # dry-run preview の固定方針（draft-composition.md: MVP は mixed / 日本語標準）。
@@ -200,12 +200,7 @@ def _run_preview_draft(input_file: Path, config: Config) -> int:
             print(f"  - {issue}", file=sys.stderr)
         return EXIT_INPUT_INVALID
 
-    try:
-        provider = build_llm_provider(config.llm)
-    except LLMProviderConfigError as exc:
-        print(f"llm provider unavailable: {exc}", file=sys.stderr)
-        return EXIT_CONFIG_INVALID
-
+    provider = MockLLMProvider(prompt_version=config.llm.prompt_version or DEFAULT_PROMPT_VERSION)
     metadata = provider.get_provider_metadata()
     advisory = loaded.advisory
     urgency = loaded.urgency or DEFAULT_URGENCY

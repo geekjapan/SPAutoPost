@@ -29,8 +29,7 @@ REQUIRED_SECTION_HEADINGS: tuple[str, ...] = (
 )
 
 # DraftOutput には「対象（影響を受ける製品）」専用フィールドが無い。reviewer が advisory
-# から補う前提で placeholder を出す。
-# ponytail: 対象 field が DraftOutput に追加されたらそれを使う。
+# から補う前提で placeholder を出す。将来 DraftOutput に対象 field が追加されたら置き換える。
 TARGET_SECTION_PLACEHOLDER = "（対象製品は advisory を参照して確認してください）"
 DEADLINE_UNSET = "未定（要確認）"
 

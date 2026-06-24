@@ -241,6 +241,54 @@ def test_preview_draft_shows_payload_and_audit_event(
     assert "generation_input_hash" in out
 
 
+def test_preview_draft_always_uses_mock_provider(
+    config_dir: Path,
+    valid_environ: dict[str, str],
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    _set_env(monkeypatch, valid_environ)
+    default_config = config_dir / "default.yml"
+    default_config.write_text(
+        default_config.read_text(encoding="utf-8").replace(
+            "provider: test_mock", "provider: production_api"
+        ),
+        encoding="utf-8",
+    )
+    input_file = tmp_path / "advisory.yaml"
+    _write_advisory(input_file)
+
+    code = main(["--config-dir", str(config_dir), "preview-draft", str(input_file)])
+
+    out = capsys.readouterr().out
+    assert code == 0
+    assert '"provider_name": "test_mock"' in out
+
+
+def test_preview_draft_defaults_prompt_version(
+    config_dir: Path,
+    valid_environ: dict[str, str],
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    _set_env(monkeypatch, valid_environ)
+    default_config = config_dir / "default.yml"
+    default_config.write_text(
+        default_config.read_text(encoding="utf-8").replace("  prompt_version: v1\n", ""),
+        encoding="utf-8",
+    )
+    input_file = tmp_path / "advisory.yaml"
+    _write_advisory(input_file)
+
+    code = main(["--config-dir", str(config_dir), "preview-draft", str(input_file)])
+
+    out = capsys.readouterr().out
+    assert code == 0
+    assert '"prompt_version": "v1"' in out
+
+
 def test_preview_draft_redacts_secret_targets(
     config_dir: Path,
     valid_environ: dict[str, str],
