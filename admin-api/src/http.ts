@@ -28,22 +28,22 @@ export async function handleAdminApiRequest(
 ): Promise<ApiResponse> {
   try {
     if (request.method === "GET" && request.path === "/api/drafts") {
-      return await listDrafts(store, pageParams(request.query));
+      return await listDrafts(store, contextFrom(request), pageParams(request.query));
     }
 
     const commandMatch = matchCommandPath(request.path);
     if (request.method === "GET" && commandMatch) {
-      return await getCommandStatus(store, commandMatch.commandId);
+      return await getCommandStatus(store, contextFrom(request), commandMatch.commandId);
     }
 
     const auditMatch = matchDraftAuditPath(request.path);
     if (request.method === "GET" && auditMatch) {
-      return await listAuditEvents(store, auditMatch.draftId);
+      return await listAuditEvents(store, contextFrom(request), auditMatch.draftId);
     }
 
     const draftMatch = matchDraftPath(request.path);
     if (request.method === "GET" && draftMatch) {
-      return await getDraft(store, draftMatch.draftId);
+      return await getDraft(store, contextFrom(request), draftMatch.draftId);
     }
 
     if (request.method === "PATCH" && draftMatch) {

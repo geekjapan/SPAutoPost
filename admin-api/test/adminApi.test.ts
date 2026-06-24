@@ -90,7 +90,7 @@ describe("Admin API skeleton", () => {
     const response = await handleAdminApiRequest(store, {
       method: "GET",
       path: "/api/drafts",
-      headers: new Map(),
+      headers: headers({ roles: "viewer" }),
     });
 
     assert.equal(response.status, 200);
@@ -106,7 +106,7 @@ describe("Admin API skeleton", () => {
         ["limit", " "],
         ["offset", ""],
       ]),
-      headers: new Map(),
+      headers: headers({ roles: "viewer" }),
     });
 
     assert.equal(response.status, 200);
@@ -130,6 +130,17 @@ describe("Admin API skeleton", () => {
         message: "State-changing Admin API requests require an Idempotency-Key header",
       },
     });
+  });
+
+  it("requires an admin principal for read paths", async () => {
+    const response = await handleAdminApiRequest(store, {
+      method: "GET",
+      path: "/api/drafts",
+      headers: new Map(),
+    });
+
+    assert.equal(response.status, 401);
+    assert.equal(store.enqueued.length, 0);
   });
 
   it("enqueues approve as AdminCommand and exposes a status URL", async () => {
@@ -190,11 +201,37 @@ describe("Admin API skeleton", () => {
     const response = await handleAdminApiRequest(store, {
       method: "GET",
       path: `/api/commands/${command.commandId}`,
-      headers: new Map(),
+      headers: headers({ roles: "viewer" }),
     });
 
     assert.equal(response.status, 200);
-    assert.equal((response.body.data as AdminCommand).status, "pending");
+    assert.deepEqual(response.body.data, {
+      commandId: command.commandId,
+      status: "pending",
+      errorCode: undefined,
+      errorMessage: undefined,
+      processedAt: undefined,
+    });
+    assert.equal("payload" in (response.body.data as Record<string, unknown>), false);
+  });
+
+  it("rejects secret-looking AdminCommand payload keys", async () => {
+    const response = await handleAdminApiRequest(store, {
+      method: "PATCH",
+      path: "/api/drafts/draft-1",
+      headers: headers({ roles: "reviewer", idempotencyKey: "secret-payload-1" }),
+      body: { nested: { access_token: "not-stored" } },
+    });
+
+    assert.equal(response.status, 400);
+    assert.equal(store.enqueued.length, 0);
+    assert.deepEqual(response.body, {
+      success: false,
+      error: {
+        code: "secret_payload_key",
+        message: "AdminCommand payload must not contain secret-looking keys",
+      },
+    });
   });
 
   it("joins multi-value HTTP headers before role parsing", async () => {

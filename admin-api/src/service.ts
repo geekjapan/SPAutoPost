@@ -35,17 +35,39 @@ const WRITE_ROLES: Record<AdminCommandType, readonly AdminRole[]> = {
   publish_request: ["publisher", "admin"],
 };
 
+const READ_ROLES: readonly AdminRole[] = ["viewer", "reviewer", "approver", "publisher", "admin"];
+
+const SECRET_KEY_FRAGMENTS = [
+  "api_key",
+  "apikey",
+  "access_token",
+  "refreshtoken",
+  "refresh_token",
+  "client_secret",
+  "private_key",
+  "password",
+  "cookie",
+  "authorization",
+] as const;
+
 export async function listDrafts(
   store: AdminApiStore,
+  context: RequestContext,
   params: { readonly limit?: number; readonly offset?: number },
 ): Promise<ApiResponse> {
+  requireRole(context.principal, READ_ROLES);
   const limit = normalizePageNumber(params.limit, 100, 1, 200);
   const offset = normalizePageNumber(params.offset, 0, 0, 100_000);
   const drafts = await store.listDrafts({ limit, offset });
   return { status: 200, body: { data: drafts, pagination: { limit, offset } } };
 }
 
-export async function getDraft(store: AdminApiStore, draftId: string): Promise<ApiResponse> {
+export async function getDraft(
+  store: AdminApiStore,
+  context: RequestContext,
+  draftId: string,
+): Promise<ApiResponse> {
+  requireRole(context.principal, READ_ROLES);
   const draft = await store.getDraft(draftId);
   if (!draft) {
     throw new ApiError(404, "draft_not_found", `DraftPost ${draftId} was not found`);
@@ -59,21 +81,36 @@ export async function getDraft(store: AdminApiStore, draftId: string): Promise<A
 
 export async function listAuditEvents(
   store: AdminApiStore,
+  context: RequestContext,
   draftId: string,
 ): Promise<ApiResponse> {
+  requireRole(context.principal, READ_ROLES);
   const auditEvents = await store.listAuditEvents(draftId);
   return { status: 200, body: { data: auditEvents } };
 }
 
 export async function getCommandStatus(
   store: AdminApiStore,
+  context: RequestContext,
   commandId: string,
 ): Promise<ApiResponse> {
+  requireRole(context.principal, READ_ROLES);
   const command = await store.getCommand(commandId);
   if (!command) {
     throw new ApiError(404, "command_not_found", `AdminCommand ${commandId} was not found`);
   }
-  return { status: 200, body: { data: command } };
+  return {
+    status: 200,
+    body: {
+      data: {
+        commandId: command.commandId,
+        status: command.status,
+        errorCode: command.errorCode,
+        errorMessage: command.errorMessage,
+        processedAt: command.processedAt,
+      },
+    },
+  };
 }
 
 export async function enqueueDraftCommand(
@@ -86,6 +123,7 @@ export async function enqueueDraftCommand(
   },
 ): Promise<ApiResponse> {
   requireRole(context.principal, WRITE_ROLES[input.commandType]);
+  rejectSecretPayload(input.payload);
   const clientKey = requireIdempotencyKey(context.headers);
   const correlationId = context.headers.get("x-correlation-id") ?? randomUUID();
   const command: NewAdminCommand = {
@@ -161,6 +199,30 @@ function requireRole(principal: AdminPrincipal, allowed: readonly AdminRole[]): 
     return;
   }
   throw new ApiError(403, "insufficient_role", `Required role: ${allowed.join(" or ")}`);
+}
+
+function rejectSecretPayload(payload: Record<string, unknown>): void {
+  if (containsSecretKey(payload)) {
+    throw new ApiError(
+      400,
+      "secret_payload_key",
+      "AdminCommand payload must not contain secret-looking keys",
+    );
+  }
+}
+
+function containsSecretKey(value: unknown): boolean {
+  if (Array.isArray(value)) {
+    return value.some(containsSecretKey);
+  }
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
+  return Object.entries(value).some(([key, nested]) => {
+    const normalized = key.toLowerCase().replaceAll("-", "_");
+    return SECRET_KEY_FRAGMENTS.some((fragment) => normalized.includes(fragment))
+      || containsSecretKey(nested);
+  });
 }
 
 function requireIdempotencyKey(headers: ReadonlyMap<string, string>): string {
