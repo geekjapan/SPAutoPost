@@ -14,7 +14,7 @@ def _base_config() -> dict[str, object]:
     return {
         "app": {"environment": "development", "dry_run": True},
         "storage": {"provider": "sqlite", "sqlite_path": "./x.sqlite3"},
-        "llm": {"provider": "mock"},
+        "llm": {"provider": "test_mock"},
         "sharepoint": {
             "mode": "site-page",
             "allow_publish": False,
@@ -42,7 +42,7 @@ def test_load_and_validate_reads_and_merges_environment(
     assert config.app.environment == "test"
     assert config.app.dry_run is False
     assert config.storage.provider == "sqlite"
-    assert config.llm.provider == "mock"
+    assert config.llm.provider == "test_mock"
 
 
 def test_dry_run_defaults_to_true_when_absent() -> None:
@@ -103,6 +103,19 @@ def test_unknown_provider_is_rejected() -> None:
         validate_config(raw, _environ())
 
     assert any("llm.provider must be one of" in i for i in excinfo.value.issues)
+
+
+@pytest.mark.parametrize(
+    "provider",
+    ["production_api", "production_flow", "generic_api", "test_mock", "test_manual"],
+)
+def test_llm_provider_types_are_supported(provider: str) -> None:
+    raw = _base_config()
+    raw["llm"] = {"provider": provider}
+
+    config = validate_config(raw, _environ())
+
+    assert config.llm.provider == provider
 
 
 def test_allow_publish_requires_approval() -> None:
