@@ -53,9 +53,11 @@ Proposed
 
 ## Priority Score
 
-初期の priority score は単純な加点方式とします。
+初期の priority score は単純な加点方式とします。正本実装は `spautopost.triage`
+（`priority_score` / `urgency_for_score` / `severity_from_cvss` / `merge_advisories` /
+`duplicate_post_key`）であり、以下の定数と一致します。
 
-例:
+加点表:
 
 - critical: +40
 - high: +30
@@ -119,7 +121,11 @@ duplicate key の候補:
 - normalized title hash
 - target audience
 
-Publication の idempotency_key と組み合わせて、再投稿を防ぎます。
+`spautopost.triage.duplicate_post_key` は dedup 済み sorted CVE/JVN/vendor advisory
+ID と正規化済み title（小文字化・空白圧縮）と audience を結合し、SHA-256 の full
+digest で `dup-<hex>` 形式の stable key を生成します。identifier-less advisory では
+同じ汎用 title の衝突を避けるため advisory ID も key に含めます。Publication の
+idempotency_key と組み合わせて、再投稿を防ぎます。
 
 ## Reviewer Override
 
