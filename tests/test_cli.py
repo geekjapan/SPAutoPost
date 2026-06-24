@@ -196,3 +196,85 @@ def test_import_advisory_read_error_returns_one(
     assert code == 1
     err = capsys.readouterr().err
     assert "advisory input read failed" in err
+
+
+def _write_advisory(path: Path) -> None:
+    path.write_text(
+        """
+title: Example の脆弱性
+summary: 権限昇格の可能性があります。
+severity: high
+urgency: high
+references:
+  - label: Vendor
+    url: https://example.com/advisory
+    type: vendor
+""",
+        encoding="utf-8",
+    )
+
+
+def test_preview_draft_shows_payload_and_audit_event(
+    config_dir: Path,
+    valid_environ: dict[str, str],
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    _set_env(monkeypatch, valid_environ)
+    input_file = tmp_path / "advisory.yaml"
+    _write_advisory(input_file)
+
+    code = main(["--config-dir", str(config_dir), "preview-draft", str(input_file)])
+
+    out = capsys.readouterr().out
+    assert code == 0
+    assert '"dry_run": true' in out
+    # 投稿予定 payload（Site Page 必須セクション）と監査イベントの両方が出る
+    assert '"payload"' in out
+    assert "概要" in out
+    assert "参考情報" in out
+    assert '"event_type": "publish_dry_run"' in out
+    assert '"provider_name": "test_mock"' in out
+    assert '"prompt_version": "v1"' in out
+    assert '"operation": "dry-run"' in out
+    assert "generation_input_hash" in out
+
+
+def test_preview_draft_redacts_secret_targets(
+    config_dir: Path,
+    valid_environ: dict[str, str],
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    _set_env(monkeypatch, valid_environ)
+    input_file = tmp_path / "advisory.yaml"
+    _write_advisory(input_file)
+
+    code = main(["--config-dir", str(config_dir), "preview-draft", str(input_file)])
+
+    out = capsys.readouterr().out
+    assert code == 0
+    # env: 参照も解決済み Secret 値も出ない
+    assert "***" in out
+    assert "env:SPAUTOPOST_SHAREPOINT_SITE_ID" not in out
+    assert "site-xyz" not in out
+    assert "lib-xyz" not in out
+
+
+def test_preview_draft_invalid_input_returns_three(
+    config_dir: Path,
+    valid_environ: dict[str, str],
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    _set_env(monkeypatch, valid_environ)
+    input_file = tmp_path / "invalid.yaml"
+    input_file.write_text("title: only title\n", encoding="utf-8")
+
+    code = main(["--config-dir", str(config_dir), "preview-draft", str(input_file)])
+
+    assert code == 3
+    assert "advisory input validation failed" in capsys.readouterr().err
