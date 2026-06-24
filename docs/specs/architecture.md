@@ -159,6 +159,9 @@ Scheduled Job / Manual Import
 - AuditEvent を参照する
 - DraftPost の状態機械、ReviewEvent / AuditEvent 記録、publish 処理は直接実行しない
 
+Python core 側では、DraftPost の状態機械、ReviewEvent / AuditEvent 記録、
+publish 処理を所有する。
+
 ### Python CLI / Batch
 
 - local development と dry-run を支える
