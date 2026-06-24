@@ -1,0 +1,15 @@
+title: Microsoft Exchange Server の脆弱性
+summary: 認証済み攻撃者により権限昇格される可能性があります。
+cve_ids:
+  - CVE-2026-12345
+jvn_ids:
+  - JVNDB-2026-000123
+severity: high
+urgency: high
+references:
+  - label: Vendor advisory
+    url: https://example.com/security/update
+    type: vendor
+tags:
+  - exchange
+published_at: "2026-06-01T00:00:00Z"
