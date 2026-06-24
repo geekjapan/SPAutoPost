@@ -129,8 +129,8 @@ function pageParams(query: ReadonlyMap<string, string> | undefined): {
 }
 
 function numberFromQuery(query: ReadonlyMap<string, string> | undefined, key: string): number | undefined {
-  const value = query?.get(key);
-  if (value === undefined) {
+  const value = query?.get(key)?.trim();
+  if (value === undefined || value === "") {
     return undefined;
   }
   const parsed = Number(value);

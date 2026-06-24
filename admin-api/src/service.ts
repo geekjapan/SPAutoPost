@@ -133,8 +133,9 @@ export function normalizeHeaders(headers: Record<string, string | string[] | und
   for (const [key, value] of Object.entries(headers)) {
     if (typeof value === "string") {
       normalized.set(key.toLowerCase(), value);
-    } else if (Array.isArray(value) && typeof value[0] === "string") {
-      normalized.set(key.toLowerCase(), value[0]);
+    } else if (Array.isArray(value)) {
+      const joined = value.filter((item): item is string => typeof item === "string").join(",");
+      normalized.set(key.toLowerCase(), joined);
     }
   }
   return normalized;

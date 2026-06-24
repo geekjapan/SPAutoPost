@@ -198,6 +198,9 @@ function mapAdminCommand(row: Record<string, unknown>): AdminCommand {
 }
 
 function stringValue(value: unknown): string {
+  if (value === null || value === undefined) {
+    return "";
+  }
   if (typeof value === "string") {
     return value;
   }
@@ -232,8 +235,12 @@ function arrayValue(value: unknown): readonly unknown[] {
     return value;
   }
   if (typeof value === "string") {
-    const parsed = JSON.parse(value) as unknown;
-    return Array.isArray(parsed) ? parsed : [];
+    try {
+      const parsed = JSON.parse(value) as unknown;
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
   }
   return [];
 }
@@ -243,8 +250,12 @@ function objectValue(value: unknown): Record<string, unknown> | undefined {
     return value;
   }
   if (typeof value === "string") {
-    const parsed = JSON.parse(value) as unknown;
-    return isRecord(parsed) ? parsed : undefined;
+    try {
+      const parsed = JSON.parse(value) as unknown;
+      return isRecord(parsed) ? parsed : undefined;
+    } catch {
+      return undefined;
+    }
   }
   return undefined;
 }

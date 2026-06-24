@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { beforeEach, describe, it } from "node:test";
 import { handleAdminApiRequest } from "../src/http.js";
+import { normalizeHeaders } from "../src/service.js";
 import type {
   AdminApiStore,
   AdminCommand,
@@ -97,6 +98,21 @@ describe("Admin API skeleton", () => {
     assert.deepEqual((response.body.data as DraftPostSummary[])[0]?.draftId, "draft-1");
   });
 
+  it("treats empty pagination query parameters as defaults", async () => {
+    const response = await handleAdminApiRequest(store, {
+      method: "GET",
+      path: "/api/drafts",
+      query: new Map([
+        ["limit", " "],
+        ["offset", ""],
+      ]),
+      headers: new Map(),
+    });
+
+    assert.equal(response.status, 200);
+    assert.deepEqual(response.body.pagination, { limit: 100, offset: 0 });
+  });
+
   it("requires a client Idempotency-Key for state-changing writes", async () => {
     const response = await handleAdminApiRequest(store, {
       method: "POST",
@@ -179,6 +195,23 @@ describe("Admin API skeleton", () => {
 
     assert.equal(response.status, 200);
     assert.equal((response.body.data as AdminCommand).status, "pending");
+  });
+
+  it("joins multi-value HTTP headers before role parsing", async () => {
+    const normalized = normalizeHeaders({
+      "x-spautopost-user": "user-1",
+      "x-spautopost-roles": ["viewer", "approver"],
+    });
+
+    const response = await handleAdminApiRequest(store, {
+      method: "POST",
+      path: "/api/drafts/draft-1/approve",
+      headers: new Map([...normalized, ["idempotency-key", "multi-header-1"]]),
+      body: {},
+    });
+
+    assert.equal(response.status, 202);
+    assert.equal(store.enqueued[0]?.commandType, "approve");
   });
 });
 
