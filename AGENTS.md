@@ -114,8 +114,11 @@ PR には最低限、次を含めてください。
 ### 実行モデル
 
 - **1 Issue = 1 Orca worktree = 1 OpenSpec change** を基本単位とする。worktree ごとに Claude Code / Codex（必要に応じ OpenCode / Pi）を起動する。
+- Orca 利用時は **Orca Orchestrator を coordinator** とし、Issue 選定、worktree 作成、task dispatch、`worker_done`（作業完了通知）/ `escalation`（人間または coordinator 介入要求）/ `decision_gate`（判断待ち）、PR review 対応、merge gate、archive、次 Issue 選定を Dynamic Workflow として扱う。
+- エージェントは Codex 固定ではなく、Claude Code Bypass/Yolo と Codex yolo を含む multi-runtime worker pool として使う。Orca 内で起動する実装 worker は原則 yolo/bypass 前提で、承認待ちで停止しない設計にする。
 - worktree 起動時のスクリプトは `orca.yaml`（`scripts.setup` / `issueCommand` / `archive`）で共有する。
-- 設計難度が高い change は同一 Issue を複数エージェントに並列で当て、diff を比較して優位案をマージしてよい（採否理由を PR/Issue に残す）。
+- 独立 Issue は複数 worktree で並行消化する。設計難度やリスクが高い、または方式が割れる場合は、同一 Issue を複数エージェント（Codex / Claude Code など）に並列で当て、diff を比較して優位案をマージする（採否理由を PR/Issue に残す）。
+- PR review 対応、CI 失敗修正、最終 diff review は、原則として既存 Issue worktree に fresh worker terminal を追加して処理する。実装 worker とは別 runtime にレビューさせることを推奨する。
 
 ### agmsg 協調
 
