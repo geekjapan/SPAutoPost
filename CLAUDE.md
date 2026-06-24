@@ -15,7 +15,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 詳細は `AGENTS.md`「自律マルチエージェント運用」節と `docs/runbooks/multi-agent-orchestration.md` を正とする。ここでは Claude Code 固有の補足のみ:
 
 - このセッションは Orca worktree 内で動作しうる（`ORCA_*` 環境変数）。1 Issue = 1 worktree = 1 OpenSpec change。
-- 仕様駆動スパイン: `opsx:propose` → `self-grill-across-multi-propose`（事前ゲート）→ `tdd` → `ecc:code-review` / `ecc:security-review` → PR → `opsx:apply` / `opsx:archive`。
+- OpenSpec-first: Issue 正本確認後、実装・レビュー・PR 作成より先に `opsx:propose` / `opsx:ff` で change を作成・更新する。
+- 仕様駆動スパイン: `opsx:propose` / `opsx:ff` → `openspec validate <change-id> --strict` → `self-grill-across-multi-propose`（事前ゲート）→ `opsx:apply`（TDD 手順で実装）→ `ecc:code-review` / `ecc:security-review` → PR → `opsx:archive`。
+- OpenSpec change が Issue / Spec と矛盾する、または必要情報が欠ける場合は実装へ進まず、`decision_gate` / `escalation` で coordinator に戻す。
 - 規約・チェックリストは `.claude/rules/ecc/`（common+python+typescript+web、`paths:` で自動適用）。
 - agmsg: team=`spautopost`、monitor モードで受信。共有ファイル変更・依存・Spec 差分は他エージェントへ通知。
 - 自律度=高（merge まで自動）。ただし仕様不足 / 認証・認可・Secret・投稿(publish) / Spec 差分 / CI 未整備 は人間ゲート（`AGENTS.md` の carve-out を参照）。

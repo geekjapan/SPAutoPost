@@ -128,9 +128,9 @@ PR には最低限、次を含めてください。
 
 ### スキル起動（ハーネス別）
 
-- Claude Code: 計画 `ecc:plan`、仕様化 `opsx:propose`/`opsx:ff`、事前ゲート `self-grill-across-multi-propose`、実装 `tdd`、レビュー `ecc:code-review`、セキュリティ `ecc:security-review`、適用 `opsx:apply`。規約は `.claude/rules/ecc/`。
+- Claude Code: 計画 `ecc:plan`、仕様化 `opsx:propose`/`opsx:ff`、事前ゲート `self-grill-across-multi-propose`、適用/実装 `opsx:apply`（TDD 手順）、レビュー `ecc:code-review`、セキュリティ `ecc:security-review`、同期/完了 `opsx:sync`/`opsx:archive`。規約は `.claude/rules/ecc/`。
 - Codex: `AGENTS.md` をネイティブに読む。OpenSpec は `.codex/skills`、agmsg 受信は `.codex/hooks.json`（Stop フック）。事前ゲート・レビュー・セキュリティは本ファイルと runbook のチェックリストに準拠する。
-- Orca 上の Claude Code 実装 worker も OpenSpec-first とする。Issue 正本確認後、`opsx:propose` / `opsx:ff` で change を作成・更新し、`openspec validate <change-id> --strict` を通してから実装へ進む。
+- Orca 上の Claude Code 実装 worker も OpenSpec-first とする。Issue 正本確認後、`opsx:propose` / `opsx:ff` で change を作成・更新し、`openspec validate <change-id> --strict`、事前ゲートを経て、`opsx:apply` の中で TDD 手順により実装する。
 
 ### 自律度と人間ゲート
 
