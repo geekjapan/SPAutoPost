@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
@@ -128,6 +129,25 @@ def test_migrate_applies_then_reports_no_pending(
     out2 = capsys.readouterr().out
     assert code2 == 0
     assert "no pending migrations (sqlite)" in out2
+
+
+def test_run_sample_source_job_generates_draft(
+    config_dir: Path,
+    valid_environ: dict[str, str],
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    _set_env(monkeypatch, valid_environ)
+    _write_sqlite_config(config_dir, tmp_path / "sample-job.sqlite3")
+
+    code = main(["--config-dir", str(config_dir), "run-sample-source-job"])
+
+    preview = json.loads(capsys.readouterr().out)
+    assert code == 0
+    assert preview["generated_count"] == 1
+    assert preview["draft_ids"] == ["draft-sample-advisory-sample-2026-0001"]
+    assert preview["source_record_ids"][0].startswith("sample-src-")
 
 
 def test_import_advisory_dry_run_preview(
