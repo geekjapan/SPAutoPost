@@ -131,12 +131,19 @@ def build_llm_provider(config: LLMConfig, *, fixture: DraftOutput | None = None)
     """検証済み LLMConfig から provider を構築する。"""
     if config.provider == "test_mock":
         return MockLLMProvider(fixture=fixture, prompt_version=config.prompt_version)
-    raise LLMProviderConfigError(f"llm provider is not implemented in Issue #6: {config.provider}")
+    raise LLMProviderConfigError(
+        f"llm provider {config.provider!r} is not supported; only 'test_mock' is implemented"
+    )
 
 
 def _advisory_title(advisory: AdvisoryPayload | Sequence[AdvisoryPayload]) -> str:
-    first = advisory if isinstance(advisory, Mapping) else next(iter(advisory), {})
-    title = first.get("title")
+    if isinstance(advisory, Mapping):
+        first: object = advisory
+    elif isinstance(advisory, Sequence) and not isinstance(advisory, str | bytes | bytearray):
+        first = next(iter(advisory), None)
+    else:
+        first = None
+    title = first.get("title") if isinstance(first, Mapping) else None
     return title if isinstance(title, str) and title else "SPAutoPost mock draft"
 
 
@@ -146,7 +153,7 @@ def _urgency_prefix(urgency: Urgency) -> str:
         "high": "[重要]",
         "normal": "[注意喚起]",
         "low": "[参考]",
-    }[urgency]
+    }.get(urgency, "[注意喚起]")
 
 
 def _input_hash(draft_input: DraftInput) -> str:

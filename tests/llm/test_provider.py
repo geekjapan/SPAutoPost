@@ -79,4 +79,34 @@ def test_build_llm_provider_rejects_unimplemented_provider_types(provider: str) 
     with pytest.raises(LLMProviderConfigError) as excinfo:
         build_llm_provider(LLMConfig(provider=provider, prompt_version="v1"))
 
-    assert provider in str(excinfo.value)
+    message = str(excinfo.value)
+    assert provider in message
+    assert "Issue #6" not in message
+    assert "test_mock" in message
+
+
+@pytest.mark.parametrize(
+    "advisory",
+    [
+        {"title": "Single mapping advisory"},
+        [{"title": "First sequence advisory"}, {"title": "Second"}],
+        [],
+        ["malformed", 123],
+        "unexpected string",
+    ],
+)
+def test_mock_provider_handles_unexpected_advisory_shapes(advisory: object) -> None:
+    draft_input = DraftInput(
+        advisory=advisory,  # type: ignore[arg-type]
+        target_audience="mixed",
+        target_language="ja-JP",
+        urgency="high",
+        template_id="sharepoint-m1",
+        prompt_version="v1",
+        references=(),
+    )
+
+    draft = MockLLMProvider().generate_draft(draft_input)
+
+    assert isinstance(draft.title, str)
+    assert draft.title.strip() != ""
