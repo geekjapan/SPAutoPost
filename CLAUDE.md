@@ -15,8 +15,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 詳細は `AGENTS.md`「自律マルチエージェント運用」節と `docs/runbooks/multi-agent-orchestration.md` を正とする。ここでは Claude Code 固有の補足のみ:
 
 - このセッションは Orca worktree 内で動作しうる（`ORCA_*` 環境変数）。1 Issue = 1 worktree = 1 OpenSpec change。
-- OpenSpec-first: Issue 正本確認後、実装・レビュー・PR 作成より先に `opsx:propose` / `opsx:ff` で change を作成・更新する。
+- OpenSpec-first: Issue 正本確認後、実装・レビュー・PR 作成より先に `opsx:propose` / `opsx:ff` で change を作成・更新する。既存 change がある場合も、作業前に Issue / Spec と矛盾しないことを再確認し、必要なら先に change を更新する。
 - 仕様駆動スパイン: `opsx:propose` / `opsx:ff` → `openspec validate <change-id> --strict` → `self-grill-across-multi-propose`（事前ゲート）→ `opsx:apply`（TDD 手順で実装）→ `ecc:code-review` / `ecc:security-review` → PR → `opsx:archive`。
+- `ecc:plan` / `ecc:feature-dev` / `ecc:code-review` などの ECC 手順は OpenSpec change の後段として使う。Issue に対応する OpenSpec change が未作成・未検証のまま実装へ進まない。
+- Orca から起動された Claude worker は `--dangerously-skip-permissions` 前提でも、OpenSpec-first と carve-out（仕様不足 / 認証・認可・Secret・投稿 / Spec 差分 / セキュリティ判断）を優先する。
 - OpenSpec change が Issue / Spec と矛盾する、または必要情報が欠ける場合は実装へ進まず、`decision_gate` / `escalation` で coordinator に戻す。
 - 規約・チェックリストは `.claude/rules/ecc/`（common+python+typescript+web、`paths:` で自動適用）。
 - agmsg: team=`spautopost`、monitor モードで受信。共有ファイル変更・依存・Spec 差分は他エージェントへ通知。

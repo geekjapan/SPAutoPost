@@ -11,7 +11,8 @@
 Use with caution:
 - Enable for trusted, well-defined plans
 - Disable for exploratory work
-- Never use dangerously-skip-permissions flag
+- Never use dangerously-skip-permissions flag for ad-hoc local sessions
+- Exception: Orca-managed worker terminals may use `claude --dangerously-skip-permissions` when the prompt is tied to a GitHub Issue, OpenSpec-first flow, and the human-gate carve-outs in `AGENTS.md`
 - Configure `allowedTools` in `~/.claude.json` instead
 
 ## TodoWrite Best Practices

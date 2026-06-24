@@ -130,7 +130,8 @@ PR には最低限、次を含めてください。
 
 - Claude Code: 計画 `ecc:plan`、仕様化 `opsx:propose`/`opsx:ff`、事前ゲート `self-grill-across-multi-propose`、適用/実装 `opsx:apply`（TDD 手順）、レビュー `ecc:code-review`、セキュリティ `ecc:security-review`、同期/完了 `opsx:sync`/`opsx:archive`。規約は `.claude/rules/ecc/`。
 - Codex: `AGENTS.md` をネイティブに読む。OpenSpec は `.codex/skills`、agmsg 受信は `.codex/hooks.json`（Stop フック）。事前ゲート・レビュー・セキュリティは本ファイルと runbook のチェックリストに準拠する。
-- Orca 上の Claude Code 実装 worker も OpenSpec-first とする。Issue 正本確認後、`opsx:propose` / `opsx:ff` で change を作成・更新し、`openspec validate <change-id> --strict`、事前ゲートを経て、`opsx:apply` の中で TDD 手順により実装する。
+- Orca 上の Claude Code 実装 worker は OpenSpec-first を必須とする。Issue 正本確認後、`opsx:propose` / `opsx:ff` で change を作成・更新し、`openspec validate <change-id> --strict`、事前ゲートを経て、`opsx:apply` の中で TDD 手順により実装する。`ecc:plan` / `ecc:feature-dev` / `ecc:code-review` は OpenSpec change の後段で使い、change 未作成・未検証のまま実装へ進めない。
+- Claude Code Bypass/Yolo は Orca 管理下の worker 停止回避のための実行モードであり、OpenSpec-first、GitHub 正本、carve-out、人間ゲートを弱めるものではない。
 
 ### 自律度と人間ゲート
 
