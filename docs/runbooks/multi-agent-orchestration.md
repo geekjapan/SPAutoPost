@@ -110,7 +110,7 @@ Claude worker の prompt file には次の順序を明記する:
 2. 対応 OpenSpec change を `opsx:propose` / `opsx:ff` で作成または更新する。
 3. `openspec validate <change-id> --strict` を通す。
 4. `self-grill-across-multi-propose` で依存・競合・carve-out を確認する。
-5. `opsx:apply` の中で TDD 実装し、必要に応じて `ecc:*` レビューを使う。
+5. `opsx:apply` の中で TDD 実装し、必要に応じて `ecc:*` 手順（計画・レビュー等）を使う。
 6. PR には Issue / Milestone / OpenSpec change / 検証結果 / 仕様差分 / セキュリティ注意点を記録する。
 
 ## 3. agmsg 協調プレイブック
