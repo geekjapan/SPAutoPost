@@ -89,6 +89,7 @@ Codex に固定せず、Orca 上の multi-runtime worker pool として扱う。
 - hooks は事前確認済みのものだけを承認済みとして扱う。Secret や外部 publish につながる hook / tool は carve-out として人間 gate に回す。
 - 同一 Issue の fan-out では、各 candidate worktree の採否理由、落とした案、採用差分を PR または Issue に残す。
 - PR 前 review は、実装 worker とは別 runtime に投げることを推奨する。狭い修正なら同じ runtime の fresh terminal でもよい。
+- Claude Code 実装 worker も OpenSpec-first で起動する。Issue 正本確認後に `opsx:propose` / `opsx:ff` で change を作成・更新し、`openspec validate <change-id> --strict` を通してから実装へ進む。
 
 ### Worker 起動の安定パターン
 
@@ -118,7 +119,7 @@ Codex に固定せず、Orca 上の multi-runtime worker pool として扱う。
 | フェーズ | Claude Code | Codex |
 |----------|-------------|-------|
 | 計画 | `ecc:plan` / `ecc:planner` agent | AGENTS.md + 手動計画 |
-| 仕様化 | `opsx:propose` / `opsx:ff` | `openspec-propose`（`.codex/skills`） |
+| 仕様化 | `opsx:propose` / `opsx:ff`（実装前に必須） | `openspec-propose`（`.codex/skills`） |
 | 事前ゲート | `self-grill-across-multi-propose` | 同等の自己レビュー（チェックリスト） |
 | 実装 | `tdd` / `ecc:feature-dev` | TDD 手順を AGENTS.md 準拠で実施 |
 | レビュー | `ecc:code-review` / `code-reviewer` agent | `code-review`（差分レビュー） |
