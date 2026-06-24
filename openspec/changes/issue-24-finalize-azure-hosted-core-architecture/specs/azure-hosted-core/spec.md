@@ -22,7 +22,7 @@ Python CLI / Batch command は、Azure Container Apps Jobs から呼び出され
 
 ### Requirement: M1 deployment skeleton scope is defined
 
-M1 で実装すべき deployment skeleton の範囲を明確にしなければならない（SHALL）。範囲は Azure Container Apps Admin UI/API、Azure Container Apps Jobs、Azure Database for PostgreSQL Flexible Server、environment variables、container image build、GitHub Actions skeleton、Bicep skeleton を含む。本番運用 IaC の完成、本格 monitoring、Log Analytics 連携、Blue/green、DR / HA は M1 の対象外とする（SHALL NOT を M1 範囲に課す）。詳細は `docs/specs/deployment.md` を正本とし、実装は Issue #25 で行う。
+M1 で実装すべき deployment skeleton の範囲を明確にしなければならない（SHALL）。範囲は Azure Container Apps Admin UI/API、Azure Container Apps Jobs、Azure Database for PostgreSQL Flexible Server、environment variables、container image build、GitHub Actions skeleton、Bicep skeleton を含む。本番運用 IaC の完成、本格 monitoring、Log Analytics 連携、Blue/green、DR / HA を M1 deployment skeleton の完了条件に含めてはならない（SHALL NOT）。詳細は `docs/specs/deployment.md` を正本とし、実装は Issue #25 で行う。
 
 #### Scenario: M1 skeleton の構成要素を参照する
 - **WHEN** M1 で deployment skeleton（Issue #25）を実装する
