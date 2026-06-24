@@ -83,6 +83,7 @@ POST   /api/drafts/{draft_id}/approve
 POST   /api/drafts/{draft_id}/reject
 POST   /api/drafts/{draft_id}/regenerate
 POST   /api/drafts/{draft_id}/publish-request
+GET    /api/commands/{command_id}
 GET    /api/drafts/{draft_id}/audit-events
 ```
 
@@ -91,8 +92,11 @@ API の責務:
 - `GET` は PostgreSQL read のみを行い、状態を変更しない。
 - `PATCH` / `POST` は request validation と authorization を行い、`AdminCommand`
   を 1 件 enqueue して accepted/pending を返す。
-- idempotency key は Admin API server が発番する。client が request-id を供給する場合のみ、
-  重複検知の補助として併用してよい。
+- 状態を変更する `PATCH` / `POST` は client 供給の `Idempotency-Key` を必須とする。
+  Admin API は route / draft / command type と組み合わせた保存用 key を作り、
+  同一 key の retry では既存 command status を返す。
+- `GET /api/commands/{command_id}` は command status / error_code / error_message を返し、
+  非同期 reviewer UX の pending -> succeeded / failed 表示に使う。
 - publish request は「投稿してよい」という intent であり、Microsoft Graph 呼び出しや
   SharePoint 投稿処理を Admin API 内で実行しない。
 
@@ -115,6 +119,7 @@ M1 に含めるもの:
 - DraftPost list / detail / validation warning display
 - edit / approve / reject / request regeneration / publish request の command 受付
 - accepted/pending と succeeded/failed を扱う非同期 reviewer UX
+- command status read path
 - AuditEvent / ReviewEvent 参照
 - PostgreSQL 直読みと AdminCommand enqueue の境界
 - TypeScript / Node.js の Admin UI/API skeleton

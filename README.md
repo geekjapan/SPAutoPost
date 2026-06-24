@@ -104,6 +104,32 @@ spautopost preview-draft samples/advisories/manual-cve.yaml
 generation_input_hash / operation / result を含む監査イベント（`publish_dry_run`）が含まれます。
 生成が失敗した場合は error_code / error_message を持つ `error` イベントを表示します。
 
+### Admin API skeleton（TypeScript / Node.js）
+
+M1 の Admin API skeleton は `admin-api/` にあります。DraftPost の read は PostgreSQL を直読みし、
+edit / approve / reject / request regeneration / publish request は `AdminCommand` を enqueue します。
+実 SharePoint 投稿、Microsoft Graph 呼び出し、本番 Entra ID/OIDC はこの skeleton では実行しません。
+
+```sh
+npm ci
+npm run admin-api:check
+
+export SPAUTOPOST_DATABASE_URL='<postgresql-database-url>'
+PORT=3000 node admin-api/dist/src/main.js
+```
+
+state-changing request には client 供給の `Idempotency-Key` と、開発用 principal header が必要です。
+本番の Entra ID login / role mapping は #29 の対象です。
+
+```sh
+curl -X POST http://127.0.0.1:3000/api/drafts/draft-1/approve \
+  -H 'content-type: application/json' \
+  -H 'x-spautopost-user: local-reviewer' \
+  -H 'x-spautopost-roles: approver' \
+  -H 'Idempotency-Key: local-retry-key-1' \
+  -d '{"comment":"reviewed"}'
+```
+
 ## ストレージとマイグレーション
 
 ストレージは ORM 非依存の repository ポート（`StoragePort`）越しに使用します。
