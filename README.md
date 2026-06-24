@@ -206,7 +206,7 @@ local 実行と Azure 想定実行の違い:
 | | local | Azure（hosted, 想定） |
 |--|-------|----------------------|
 | 実行 | `spautopost <command>` を端末で実行 | Container Apps Jobs が image を起動し `spautopost-job <job-name>` を実行 |
-| 設定 | `config/<env>.yml`（`config.example.yml`, development / sqlite） | image の `config/default.yml`（`deploy/config.hosted.example.yml`, production / postgresql） |
+| 設定 | `config/default.yml`（`config.example.yml` 由来）を基底に任意の `config/<env>.yml` を overlay | image の `config/default.yml`（`deploy/config.hosted.example.yml`, production / postgresql） |
 | Secret | 端末の環境変数 | Container Apps secret ref → 環境変数として注入（`deploy/hosted.env.example` 参照） |
 | publish | 既定 dry-run。publish は人間ゲート | 同左。`publish-approved` job は publish しない guarded stub |
 

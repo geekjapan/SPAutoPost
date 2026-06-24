@@ -18,9 +18,9 @@ COPY src ./src
 RUN python -m pip install --upgrade pip \
     && python -m pip install ".[postgres]"
 
-# Bake the hosted config example as the baseline config so the image runs
-# standalone. Secrets stay as env: references resolved at runtime — no secret
-# values are baked in. Operators override with real config / secret refs.
+# Bake the hosted config example as the baseline config. Required secrets remain
+# env: references resolved at runtime, so operators must provide env vars /
+# Container Apps secret refs when running the image.
 COPY deploy/config.hosted.example.yml ./config/default.yml
 
 # Run as non-root.

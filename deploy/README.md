@@ -21,7 +21,7 @@ Admin UI は M1 非対象（`docs/specs/deployment.md` の Non-Goals）。
 | | local | Azure（hosted, 想定） |
 |--|-------|----------------------|
 | 実行形態 | `spautopost <command>` を端末で実行 | Container Apps Jobs が image を起動し `spautopost-job <job-name>` を実行 |
-| 設定 | `config/<env>.yml`（`config.example.yml` 由来, development） | image に焼いた `config/default.yml`（`config.hosted.example.yml` 由来, production） |
+| 設定 | `config/default.yml`（`config.example.yml` 由来）を基底に任意の `config/<env>.yml` を overlay | image に焼いた `config/default.yml`（`config.hosted.example.yml` 由来, production） |
 | storage | sqlite（`sqlite_path`） | postgresql（`database_url`, Azure Database for PostgreSQL） |
 | Secret | 端末の環境変数 | Container Apps secret ref → 環境変数として注入 |
 | publish | 既定 dry-run。publish は人間ゲート | 同左。`publish-approved` job は guarded stub（publish しない） |

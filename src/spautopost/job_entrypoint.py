@@ -27,9 +27,9 @@ EXIT_PUBLISH_GATED = 4
 PUBLISH_JOB = "publish-approved"
 
 # job name -> spautopost CLI argv. dry-run is forced where the path is safe.
-# ponytail: collect and generate resolve to the same sample-source pipeline in
-# M1 (the Python core does collect+generate in one pass). Split into distinct
-# CLI commands when separate collect/generate paths actually exist.
+# NOTE: collect and generate resolve to the same sample-source pipeline in M1
+# (the Python core does collect+generate in one pass). Split into distinct CLI
+# commands when separate collect/generate paths actually exist.
 JOB_COMMANDS: dict[str, list[str]] = {
     "dry-run": ["--dry-run", "validate-config"],
     "collect": ["--dry-run", "run-sample-source-job"],
