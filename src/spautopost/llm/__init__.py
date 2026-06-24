@@ -2,10 +2,8 @@
 
 from __future__ import annotations
 
-import hashlib
-import json
 from collections.abc import Mapping, Sequence
-from dataclasses import asdict, dataclass, field, is_dataclass
+from dataclasses import dataclass, field
 from typing import Literal, Protocol, runtime_checkable
 
 from spautopost.config import LLMConfig
@@ -109,19 +107,9 @@ class MockLLMProvider:
     def generate_draft(self, draft_input: DraftInput) -> DraftOutput:
         if self._fixture is not None:
             return self._fixture
-        title = _advisory_title(draft_input.advisory)
-        input_hash = _input_hash(draft_input)
-        return DraftOutput(
-            title=f"{_urgency_prefix(draft_input.urgency)} {title}".strip(),
-            summary_for_users=f"{title} について、公開情報に基づく確認が必要です。",
-            impact="影響範囲は入力された advisory と references を確認してください。",
-            required_actions=("参考情報を確認し、必要な更新または回避策を適用してください。",),
-            admin_actions=("管理者は対象製品と適用状況を確認してください。",),
-            references=tuple(draft_input.references),
-            warnings=("test_mock provider generated this deterministic draft.",),
-            validation_hints=("human_review_required",),
-            generation_input_hash=input_hash,
-        )
+        from .templates import compose_sharepoint_draft
+
+        return compose_sharepoint_draft(draft_input)
 
     def get_provider_metadata(self) -> ProviderMetadata:
         return self._metadata
@@ -134,42 +122,6 @@ def build_llm_provider(config: LLMConfig, *, fixture: DraftOutput | None = None)
     raise LLMProviderConfigError(
         f"llm provider {config.provider!r} is not supported; only 'test_mock' is implemented"
     )
-
-
-def _advisory_title(advisory: AdvisoryPayload | Sequence[AdvisoryPayload]) -> str:
-    if isinstance(advisory, Mapping):
-        first: object = advisory
-    elif isinstance(advisory, Sequence) and not isinstance(advisory, str | bytes | bytearray):
-        first = next(iter(advisory), None)
-    else:
-        first = None
-    title = first.get("title") if isinstance(first, Mapping) else None
-    return title if isinstance(title, str) and title else "SPAutoPost mock draft"
-
-
-def _urgency_prefix(urgency: Urgency) -> str:
-    return {
-        "emergency": "[緊急]",
-        "high": "[重要]",
-        "normal": "[注意喚起]",
-        "low": "[参考]",
-    }.get(urgency, "[注意喚起]")
-
-
-def _input_hash(draft_input: DraftInput) -> str:
-    payload = _stable_value(draft_input)
-    raw = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
-    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
-
-
-def _stable_value(value: object) -> object:
-    if is_dataclass(value) and not isinstance(value, type):
-        return _stable_value(asdict(value))
-    if isinstance(value, Mapping):
-        return {str(key): _stable_value(value[key]) for key in sorted(value, key=str)}
-    if isinstance(value, Sequence) and not isinstance(value, str | bytes | bytearray):
-        return [_stable_value(item) for item in value]
-    return value
 
 
 __all__ = [
