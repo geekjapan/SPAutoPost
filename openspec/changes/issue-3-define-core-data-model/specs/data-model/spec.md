@@ -4,7 +4,7 @@
 
 システムは正規化済みコアデータモデルとして `SourceRecord` / `Advisory` / `DraftPost` / `ReviewEvent` / `Publication` / `AuditEvent` の各エンティティを定義しなければならない（SHALL）。各エンティティの必須項目は `docs/specs/data-model.md`（normative reference）に従い、最低限 `Advisory` は `advisory_id` / `title` / `summary` / `source_refs` / `references` / `created_at` / `normalized_at` を、`DraftPost` は `draft_id` / `advisory_ids` / `title` / `audience` / `urgency` / `summary_for_users` / `impact` / `required_actions` / `status` を、`Publication` は `publication_id` / `draft_id` / `target_type` / `target_site_id` / `publication_status` / `idempotency_key` を、`AuditEvent` は `audit_event_id` / `event_type` / `correlation_id` / `result` / `created_at` を必須として持たなければならない（SHALL）。各エンティティは外部 ID とは独立した内部 ID 文字列を持たなければならない（SHALL）。
 
-#### Scenario: 4 つのコアエンティティが定義されている
+#### Scenario: コアエンティティが定義されている
 - **WHEN** データモデル定義を検査する
 - **THEN** `Advisory` / `DraftPost` / `Publication` / `AuditEvent` が必須項目付きで定義されており、出典・レビューを成立させる `SourceRecord` / `SourceRef` / `ReviewEvent` も定義されている
 
@@ -14,7 +14,7 @@
 
 ### Requirement: 出典から投稿結果までのトレーサビリティ
 
-システムは出典（source）→ AI 生成（draft generation）→ レビュー（review）→ 投稿結果（publication result）の連鎖を ID 参照で追跡可能にしなければならない（SHALL）。`Advisory.source_refs` は各情報源を `source_record_id` で参照し、`DraftPost.advisory_ids` は元の `Advisory` を、`ReviewEvent.draft_id` と `Publication.draft_id` は対象 `DraftPost` を、`AuditEvent.related_ids` は関連エンティティ（識別可能な型プレフィックス付き ID、またはエンティティ型と ID のペア）を参照しなければならない（SHALL）。任意の `Publication` から逆方向に `DraftPost` → `Advisory` → `SourceRecord` まで辿れなければならない（SHALL）。
+システムは出典（source）→ AI 生成（draft generation）→ レビュー（review）→ 投稿結果（publication result）の連鎖を ID 参照で追跡可能にしなければならない（SHALL）。`Advisory.source_refs` は各情報源を `source_record_id` で参照し、`DraftPost.advisory_ids` は元の `Advisory` を、`ReviewEvent.draft_id` と `Publication.draft_id` は対象 `DraftPost` を参照しなければならない（SHALL）。`AuditEvent.related_ids` を保持する場合は、関連エンティティを識別可能な型プレフィックス付き ID、またはエンティティ型と ID のペアとして参照しなければならない（SHALL）。任意の `Publication` から逆方向に `DraftPost` → `Advisory` → `SourceRecord` まで辿れなければならない（SHALL）。
 
 #### Scenario: 投稿結果から出典まで遡及できる
 - **WHEN** ある `Publication` を起点に参照をたどる
