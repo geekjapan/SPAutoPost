@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
@@ -142,11 +143,11 @@ def test_run_sample_source_job_generates_draft(
 
     code = main(["--config-dir", str(config_dir), "run-sample-source-job"])
 
-    out = capsys.readouterr().out
+    preview = json.loads(capsys.readouterr().out)
     assert code == 0
-    assert '"generated_count": 1' in out
-    assert "draft-sample-advisory-sample-2026-0001" in out
-    assert "sample-src-" in out
+    assert preview["generated_count"] == 1
+    assert preview["draft_ids"] == ["draft-sample-advisory-sample-2026-0001"]
+    assert preview["source_record_ids"][0].startswith("sample-src-")
 
 
 def test_import_advisory_dry_run_preview(
