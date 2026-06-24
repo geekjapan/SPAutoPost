@@ -2,10 +2,8 @@
 
 from __future__ import annotations
 
-import hashlib
-import json
 from collections.abc import Mapping, Sequence
-from dataclasses import asdict, dataclass, field, is_dataclass
+from dataclasses import dataclass, field
 from typing import Literal, Protocol, runtime_checkable
 
 from spautopost.config import LLMConfig
@@ -111,10 +109,7 @@ class MockLLMProvider:
             return self._fixture
         from .templates import compose_sharepoint_draft
 
-        return compose_sharepoint_draft(
-            draft_input,
-            generation_input_hash=_input_hash(draft_input),
-        )
+        return compose_sharepoint_draft(draft_input)
 
     def get_provider_metadata(self) -> ProviderMetadata:
         return self._metadata
@@ -127,22 +122,6 @@ def build_llm_provider(config: LLMConfig, *, fixture: DraftOutput | None = None)
     raise LLMProviderConfigError(
         f"llm provider {config.provider!r} is not supported; only 'test_mock' is implemented"
     )
-
-
-def _input_hash(draft_input: DraftInput) -> str:
-    payload = _stable_value(draft_input)
-    raw = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
-    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
-
-
-def _stable_value(value: object) -> object:
-    if is_dataclass(value) and not isinstance(value, type):
-        return _stable_value(asdict(value))
-    if isinstance(value, Mapping):
-        return {str(key): _stable_value(value[key]) for key in sorted(value, key=str)}
-    if isinstance(value, Sequence) and not isinstance(value, str | bytes | bytearray):
-        return [_stable_value(item) for item in value]
-    return value
 
 
 __all__ = [

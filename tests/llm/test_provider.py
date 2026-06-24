@@ -153,6 +153,7 @@ def test_sharepoint_composition_template_normalizes_review_flags() -> None:
         advisory={
             "title": "重複製品の注意喚起",
             "affected_products": ["Example Product", "Example Product"],
+            "mitigation": "影響する設定を無効化してください。",
             "patch_available": " UNKNOWN ",
             "exploit_status": "Unknown",
         },
@@ -167,5 +168,8 @@ def test_sharepoint_composition_template_normalizes_review_flags() -> None:
     draft = compose_sharepoint_draft(draft_input)
 
     assert draft.impact.count("Example Product") == 1
+    assert draft.source_mapping["template_id"] == "sharepoint-m1"
+    assert draft.generation_input_hash is not None
+    assert any("影響する設定を無効化してください。" in text for text in draft.required_actions)
     assert "patch availability が不明です。" in draft.uncertainty_notes
     assert "exploit status が不明です。" in draft.uncertainty_notes

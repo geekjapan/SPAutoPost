@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
 from collections.abc import Mapping, Sequence
+from dataclasses import asdict, is_dataclass
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -37,6 +40,8 @@ def compose_sharepoint_draft(
     products = _list_text(advisory.get("affected_products"))
     deadline = _deadline(advisory)
     uncertainty_notes = _uncertainty_notes(advisory, deadline)
+    input_hash = generation_input_hash or _input_hash(draft_input)
+    template_id = draft_input.template_id.strip() or SHAREPOINT_ANNOUNCEMENT_TEMPLATE_ID
 
     return DraftOutput(
         title=f"{_urgency_prefix(draft_input.urgency)} {title} 対応について",
@@ -51,11 +56,11 @@ def compose_sharepoint_draft(
         warnings=("出典にない断定を避け、必要に応じて reviewer が補足してください。",),
         uncertainty_notes=uncertainty_notes,
         source_mapping={
-            "template_id": SHAREPOINT_ANNOUNCEMENT_TEMPLATE_ID,
+            "template_id": template_id,
             "prompt_version": draft_input.prompt_version,
         },
         validation_hints=_GUARDRAIL_HINTS,
-        generation_input_hash=generation_input_hash,
+        generation_input_hash=input_hash,
     )
 
 
@@ -104,13 +109,21 @@ def _impact(summary: str, products: Sequence[str]) -> str:
 
 def _required_actions(advisory: Mapping[str, object], deadline: str | None) -> tuple[str, ...]:
     actions = ["利用中の対象製品またはサービスがあるか確認してください。"]
-    workaround = _text(advisory, "workaround", "")
-    if workaround:
-        actions.append(f"出典に記載された回避策を確認してください: {workaround}")
+    for guidance in _action_guidance(advisory):
+        actions.append(f"出典に記載された対応方法を確認してください: {guidance}")
     actions.append("更新プログラムまたは公式の対応手順が案内されている場合は適用してください。")
     if deadline:
         actions.append(f"推奨対応時期: {deadline}")
     return tuple(actions)
+
+
+def _action_guidance(advisory: Mapping[str, object]) -> tuple[str, ...]:
+    items = [
+        text
+        for key in ("workaround", "mitigation", "solution", "remediation")
+        if (text := _text(advisory, key, ""))
+    ]
+    return tuple(dict.fromkeys(items))
 
 
 def _admin_actions(advisory: Mapping[str, object], products: Sequence[str]) -> tuple[str, ...]:
@@ -153,6 +166,22 @@ def _urgency_prefix(urgency: Urgency) -> str:
         "normal": "[注意喚起]",
         "low": "[参考]",
     }.get(urgency, "[注意喚起]")
+
+
+def _input_hash(draft_input: DraftInput) -> str:
+    payload = _stable_value(draft_input)
+    raw = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+
+def _stable_value(value: object) -> object:
+    if is_dataclass(value) and not isinstance(value, type):
+        return _stable_value(asdict(value))
+    if isinstance(value, Mapping):
+        return {str(key): _stable_value(value[key]) for key in sorted(value, key=str)}
+    if isinstance(value, Sequence) and not isinstance(value, str | bytes | bytearray):
+        return [_stable_value(item) for item in value]
+    return value
 
 
 __all__ = [
