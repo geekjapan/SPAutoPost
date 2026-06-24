@@ -13,11 +13,22 @@ from spautopost.llm import (
     MockLLMProvider,
     build_llm_provider,
 )
+from spautopost.llm.templates import (
+    SHAREPOINT_ANNOUNCEMENT_PROMPT_TEMPLATE,
+    compose_sharepoint_draft,
+)
 
 
 def _draft_input() -> DraftInput:
     return DraftInput(
-        advisory={"title": "Example Product の脆弱性", "affected_products": ["Example Product"]},
+        advisory={
+            "title": "Example Product の脆弱性",
+            "summary": "権限昇格につながる可能性があります。",
+            "affected_products": ["Example Product"],
+            "deadline": "2026-07-01",
+            "patch_available": True,
+            "exploit_status": "unknown",
+        },
         target_audience="mixed",
         target_language="ja-JP",
         urgency="high",
@@ -48,7 +59,7 @@ def test_mock_provider_fallback_is_deterministic() -> None:
     second = provider.generate_draft(draft_input)
 
     assert first == second
-    assert first.title == "[重要] Example Product の脆弱性"
+    assert first.title == "[重要] Example Product の脆弱性 対応について"
     assert first.generation_input_hash is not None
 
 
@@ -110,3 +121,28 @@ def test_mock_provider_handles_unexpected_advisory_shapes(advisory: object) -> N
 
     assert isinstance(draft.title, str)
     assert draft.title.strip() != ""
+
+
+def test_sharepoint_composition_template_keeps_issue_8_sections() -> None:
+    draft_input = _draft_input()
+
+    draft = compose_sharepoint_draft(draft_input, generation_input_hash="hash-1")
+
+    assert draft.references == draft_input.references
+    assert draft.summary_for_users
+    assert draft.required_actions
+    assert draft.admin_actions
+    assert draft.deadline == "2026-07-01"
+    assert draft.source_mapping["prompt_version"] == "v1"
+    assert draft.generation_input_hash == "hash-1"
+
+
+def test_sharepoint_composition_template_records_guardrails() -> None:
+    draft = compose_sharepoint_draft(_draft_input())
+
+    assert "PoC" in SHAREPOINT_ANNOUNCEMENT_PROMPT_TEMPLATE
+    assert "guardrail:no_unsupported_claims" in draft.validation_hints
+    assert "guardrail:no_attack_steps_or_poc" in draft.validation_hints
+    assert all(
+        "exploit 手順" not in text for text in (*draft.required_actions, *draft.admin_actions)
+    )
