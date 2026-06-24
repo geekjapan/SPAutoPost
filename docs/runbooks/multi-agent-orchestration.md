@@ -90,6 +90,19 @@ Codex に固定せず、Orca 上の multi-runtime worker pool として扱う。
 - 同一 Issue の fan-out では、各 candidate worktree の採否理由、落とした案、採用差分を PR または Issue に残す。
 - PR 前 review は、実装 worker とは別 runtime に投げることを推奨する。狭い修正なら同じ runtime の fresh terminal でもよい。
 
+### Worker 起動の安定パターン
+
+長文の task preamble を `orca orchestration dispatch --inject` で Codex / Claude Code TUI へ直接流すと、runtime や TUI 状態によっては入力欄に残り、送信確定されないことがある。Orca 上で実装 worker を確実に自律走行させる場合は、次の順を既定とする。
+
+1. Issue worktree を作成する。
+2. その worktree に fresh shell terminal を作成する。
+3. `orca orchestration dispatch --task ... --to <terminal> --from <coordinator>` で lifecycle tracking だけを作る（`--inject` は使わない）。
+4. 返却された `taskId` / `dispatchId` / coordinator handle を埋め込んだ prompt file を `/tmp` に作る。
+5. shell terminal へ `codex --dangerously-bypass-approvals-and-sandbox --dangerously-bypass-hook-trust "$(cat <prompt-file>)"` または `claude --dangerously-skip-permissions "$(cat <prompt-file>)"` を送る。
+6. worker は prompt file 内の `worker_done` / `decision_gate` / `escalation` コマンドだけで coordinator と通信する。
+
+`--inject` は短い手動 review prompt など、送信状態を terminal read で確認できる場合に限って使う。
+
 ## 3. agmsg 協調プレイブック
 
 - チームは `spautopost`。各 worktree のエージェントは固有名で参加する（例: `claude-m1-scheduler`, `codex-m1-connector`）。
