@@ -89,7 +89,7 @@ Codex に固定せず、Orca 上の multi-runtime worker pool として扱う。
 - hooks は事前確認済みのものだけを承認済みとして扱う。Secret や外部 publish につながる hook / tool は carve-out として人間 gate に回す。
 - 同一 Issue の fan-out では、各 candidate worktree の採否理由、落とした案、採用差分を PR または Issue に残す。
 - PR 前 review は、実装 worker とは別 runtime に投げることを推奨する。狭い修正なら同じ runtime の fresh terminal でもよい。
-- Claude Code 実装 worker も OpenSpec-first で起動する。Issue 正本確認後に `opsx:propose` / `opsx:ff` で change を作成・更新し、`openspec validate <change-id> --strict` を通してから実装へ進む。
+- Claude Code 実装 worker も OpenSpec-first で起動する。Issue 正本確認後に `opsx:propose` / `opsx:ff` で change を作成・更新し、`openspec validate <change-id> --strict`、事前ゲートを経て、`opsx:apply` の中で TDD 手順により実装する。
 
 ### Worker 起動の安定パターン
 
@@ -121,11 +121,11 @@ Codex に固定せず、Orca 上の multi-runtime worker pool として扱う。
 | 計画 | `ecc:plan` / `ecc:planner` agent | AGENTS.md + 手動計画 |
 | 仕様化 | `opsx:propose` / `opsx:ff`（実装前に必須） | `openspec-propose`（`.codex/skills`） |
 | 事前ゲート | `self-grill-across-multi-propose` | 同等の自己レビュー（チェックリスト） |
-| 実装 | `tdd` / `ecc:feature-dev` | TDD 手順を AGENTS.md 準拠で実施 |
+| 実装 | `opsx:apply`（TDD 手順） / `ecc:feature-dev` | TDD 手順を AGENTS.md 準拠で実施 |
 | レビュー | `ecc:code-review` / `code-reviewer` agent | `code-review`（差分レビュー） |
 | セキュリティ | `ecc:security-review` / `security-reviewer` agent | security-review runbook 準拠 |
 | デバッグ | `diagnosing-bugs` | 同等の調査ループ |
-| 適用/同期 | `opsx:apply` / `opsx:sync` / `opsx:archive` | `openspec-apply-change` 他 |
+| 同期/完了 | `opsx:sync` / `opsx:archive` | `openspec-apply-change` 他 |
 
 - ルール（規約・チェックリスト）は `.claude/rules/ecc/`（common + python + typescript + web）。
 - `paths:` グロブにより、`**/*.py` 等の実コードに自動適用される。
