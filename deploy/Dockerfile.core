@@ -1,0 +1,32 @@
+# SPAutoPost Python core image (Azure Container Apps Jobs).
+# Build context = repo root:  docker build -f deploy/Dockerfile.core -t spautopost-core .
+#
+# Entrypoint is the job wrapper; Container Apps Jobs pass the job name as args,
+# e.g. args = ["collect"]. See deploy/jobs.example.yaml.
+FROM python:3.12-slim AS base
+
+ENV PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    SPAUTOPOST_ENV=production
+
+WORKDIR /app
+
+# Install the package with the postgres extra (hosted uses Azure PostgreSQL).
+COPY pyproject.toml README.md ./
+COPY src ./src
+RUN python -m pip install --upgrade pip \
+    && python -m pip install ".[postgres]"
+
+# Bake the hosted config example as the baseline config so the image runs
+# standalone. Secrets stay as env: references resolved at runtime — no secret
+# values are baked in. Operators override with real config / secret refs.
+COPY deploy/config.hosted.example.yml ./config/default.yml
+
+# Run as non-root.
+RUN useradd --create-home --uid 10001 appuser \
+    && chown -R appuser:appuser /app
+USER appuser
+
+ENTRYPOINT ["spautopost-job"]
+CMD ["dry-run"]

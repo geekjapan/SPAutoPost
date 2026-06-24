@@ -23,6 +23,8 @@ postgres = ["psycopg[binary]>=3.1"]
 
 [project.scripts]
 spautopost = "spautopost.cli:main"
+# Azure Container Apps Jobs entrypoint: spautopost-job <job-name>
+spautopost-job = "spautopost.job_entrypoint:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/spautopost"]

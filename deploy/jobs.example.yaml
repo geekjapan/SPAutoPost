@@ -1,0 +1,57 @@
+# Azure Container Apps Jobs — command skeleton (reference only, M1).
+#
+# This is a documentation-grade reference for the four scheduled job paths, not
+# production IaC. Real Bicep / ARM and deploy automation are out of scope for
+# Issue #25 (see docs/specs/deployment.md "Non-Goals"). Cron expressions and
+# resource names are placeholders.
+#
+# Shared shape:
+#   image      : built from deploy/Dockerfile.core
+#   entrypoint : spautopost-job  (ENTRYPOINT in the image)
+#   args       : [ <job-name> ]  → mapped to a safe CLI command by the wrapper
+#   secrets    : injected as env vars via Container Apps secret refs
+#               (values come from Key Vault / Container Apps secrets, never here)
+
+image: <registry>/spautopost-core:<tag>
+
+# Secret refs are shared across jobs. Names match deploy/hosted.env.example and
+# the env: references in deploy/config.hosted.example.yml.
+secretRefs:
+  - name: SPAUTOPOST_DATABASE_URL
+    secretRef: spautopost-database-url
+  - name: SPAUTOPOST_TENANT_ID
+    secretRef: spautopost-tenant-id
+  - name: SPAUTOPOST_SHAREPOINT_SITE_ID
+    secretRef: spautopost-sharepoint-site-id
+  - name: SPAUTOPOST_SHAREPOINT_PAGE_LIBRARY_ID
+    secretRef: spautopost-sharepoint-page-library-id
+
+env:
+  - name: SPAUTOPOST_ENV
+    value: production
+
+jobs:
+  # 1. dry-run: config を検証するだけ。外部通信なし。健全性確認用。
+  - name: spautopost-dry-run
+    triggerType: Schedule
+    cronExpression: "0 * * * *" # placeholder
+    args: ["dry-run"] # -> spautopost --dry-run validate-config
+
+  # 2. collect: sample-source から投稿候補を収集（M1 は deterministic、外部通信なし）。
+  - name: spautopost-collect
+    triggerType: Schedule
+    cronExpression: "0 1 * * *" # placeholder
+    args: ["collect"] # -> spautopost --dry-run run-sample-source-job
+
+  # 3. generate: 候補から DraftPost を生成（M1 は collect と同じ pipeline に解決）。
+  - name: spautopost-generate
+    triggerType: Schedule
+    cronExpression: "0 2 * * *" # placeholder
+    args: ["generate"] # -> spautopost --dry-run run-sample-source-job
+
+  # 4. publish-approved: 常に人間ゲート。M1 では guarded stub で publish しない。
+  #    scheduled 実行はせず Manual trigger（実質無効）として置く。実 publish 経路は
+  #    承認フロー確定後の後続 Issue で実装する。
+  - name: spautopost-publish-approved
+    triggerType: Manual
+    args: ["publish-approved"] # -> guarded no-op, exit 4 (never publishes)

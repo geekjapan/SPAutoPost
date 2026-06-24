@@ -1,0 +1,25 @@
+# SPAutoPost Admin API image (Azure Container Apps app). Skeleton only.
+# Build context = repo root:  docker build -f deploy/Dockerfile.admin -t spautopost-admin .
+#
+# The Admin UI/API itself is tracked by Issue #31; this image just packages the
+# existing TypeScript skeleton so it can run in the Container Apps environment.
+FROM node:24-slim AS build
+
+WORKDIR /app
+COPY package.json package-lock.json ./
+RUN npm ci
+COPY admin-api ./admin-api
+RUN npm run admin-api:build
+
+FROM node:24-slim AS runtime
+ENV NODE_ENV=production
+WORKDIR /app
+
+# Production deps only.
+COPY package.json package-lock.json ./
+RUN npm ci --omit=dev && npm cache clean --force
+COPY --from=build /app/admin-api/dist ./admin-api/dist
+
+USER node
+# Secrets (DB connection, Entra ID) come from env / Container Apps secret refs.
+CMD ["node", "admin-api/dist/src/main.js"]
