@@ -102,6 +102,22 @@ def build_parser() -> argparse.ArgumentParser:
         "run-sample-source-job",
         help="sample source から Advisory と DraftPost を生成して保存する",
     )
+    sub.add_parser(
+        "dry-run-job",
+        help="Azure Jobs 用 dry-run skeleton（config 検証のみ。外部投稿しない）",
+    )
+    sub.add_parser(
+        "collect-advisories",
+        help="Azure Jobs 用 collect skeleton（現状は sample source job を安全に実行）",
+    )
+    sub.add_parser(
+        "generate-drafts",
+        help="Azure Jobs 用 generate skeleton（未実装 path は no-op stub）",
+    )
+    sub.add_parser(
+        "publish-approved",
+        help="Azure Jobs 用 publish-approved skeleton（実 publish は行わない）",
+    )
     return parser
 
 
@@ -145,6 +161,14 @@ def _dispatch(args: argparse.Namespace, config: Config, dry_run: bool) -> int:
         return _run_preview_draft(args.input_file, config)
     if command == "run-sample-source-job":
         return _run_sample_source_job(config, dry_run)
+    if command == "dry-run-job":
+        return _run_dry_run_job(config, dry_run)
+    if command == "collect-advisories":
+        return _run_sample_source_job(config, dry_run)
+    if command == "generate-drafts":
+        return _run_generate_drafts_job(dry_run)
+    if command == "publish-approved":
+        return _run_publish_approved_job(dry_run)
     print(f"unknown command: {command}", file=sys.stderr)  # pragma: no cover
     return EXIT_RUNTIME_ERROR  # pragma: no cover
 
@@ -340,6 +364,49 @@ def _run_sample_source_job(config: Config, dry_run: bool) -> int:
             "draft_ids": [result.draft_post.draft_id for result in results],
             "advisory_ids": [result.advisory.advisory_id for result in results],
             "source_record_ids": [result.source_record.source_record_id for result in results],
+        }
+    )
+    return EXIT_OK
+
+
+def _run_dry_run_job(config: Config, dry_run: bool) -> int:
+    _print_preview(
+        {
+            "job": "dry-run",
+            "status": "ok",
+            "dry_run": dry_run,
+            "environment": config.app.environment,
+            "external_calls": False,
+            "publish_attempted": False,
+        }
+    )
+    return EXIT_OK
+
+
+def _run_generate_drafts_job(dry_run: bool) -> int:
+    _print_preview(
+        {
+            "job": "generate-drafts",
+            "status": "stub",
+            "dry_run": dry_run,
+            "external_calls": False,
+            "generated_count": 0,
+            "reason": "scheduled draft generation pipeline is not implemented in this skeleton",
+        }
+    )
+    return EXIT_OK
+
+
+def _run_publish_approved_job(dry_run: bool) -> int:
+    _print_preview(
+        {
+            "job": "publish-approved",
+            "status": "stub",
+            "dry_run": dry_run,
+            "external_calls": False,
+            "publish_attempted": False,
+            "sharepoint_mutation": False,
+            "reason": "approved publish pipeline is not implemented in this skeleton",
         }
     )
     return EXIT_OK

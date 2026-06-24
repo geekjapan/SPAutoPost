@@ -61,6 +61,8 @@ pip install -e ".[dev]"
 
 # 2. 設定サンプルをコピーして編集する（実 config は gitignore される）
 cp config.example.yml config/default.yml
+# local / hosted を明示したい場合:
+# cp config.local.example.yml config/default.yml
 
 # 3. Secret は環境変数で渡す（config には env:NAME 参照のみ）
 export SPAUTOPOST_TENANT_ID=...
@@ -78,6 +80,47 @@ spautopost show-config
 spautopost --dry-run validate-config
 spautopost --no-dry-run validate-config   # publish は人間ゲート対象
 ```
+
+## Azure Container Apps deployment skeleton（M1）
+
+M1 の deployment skeleton は、Azure Container Apps / Container Apps Jobs で実行するための
+container image build と command entrypoint の前提だけを置きます。Azure リソース作成、
+本番 Secret 登録、本格 IaC、monitoring、実 SharePoint publish はこの skeleton では行いません。
+
+```sh
+# Python core / scheduled jobs image
+docker build -f Dockerfile.core -t spautopost-core:local .
+
+# TypeScript Admin API image
+docker build -f Dockerfile.admin -t spautopost-admin:local .
+```
+
+local run は SQLite と dry-run を前提にします。
+
+```sh
+cp config.local.example.yml config/default.yml
+spautopost --dry-run dry-run-job
+spautopost --dry-run collect-advisories
+spautopost --dry-run generate-drafts
+spautopost --dry-run publish-approved
+```
+
+Azure-intended run は PostgreSQL と環境変数 / secret reference を前提にします。`config.hosted.example.yml`
+には `env:SPAUTOPOST_*` 参照だけを置き、Secret 実値は Azure Container Apps secret や GitHub
+Actions secret など、repo 外の secret 管理に置きます。
+
+Container Apps Jobs では `scripts/aca-job-entrypoint.sh` を entrypoint として使い、job 名を
+第一引数または `SPAUTOPOST_JOB` で渡します。
+
+```sh
+aca-job-entrypoint dry-run --env production --config-dir /app/config
+aca-job-entrypoint collect --env production --config-dir /app/config
+aca-job-entrypoint generate --env production --config-dir /app/config
+aca-job-entrypoint publish-approved --env production --config-dir /app/config
+```
+
+`generate-drafts` と `publish-approved` は現時点では安全な stub です。外部 LLM、Microsoft Graph、
+SharePoint 作成・更新・公開は行わず、後続 Issue の実装まで no-op として終了します。
 
 ### 手動 advisory 入力
 

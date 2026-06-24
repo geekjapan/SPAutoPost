@@ -49,6 +49,7 @@ Azure Container Apps Environment
 - normalize-and-triage
 - generate-drafts
 - publish-approved
+- M1 skeleton では Jobs entrypoint wrapper から CLI command を呼び出す。未実装 command は no-op stub とし、実 publish や外部 API 呼び出しは行わない。
 
 ### PostgreSQL
 
@@ -82,6 +83,12 @@ Dockerfile.admin
 
 または monorepo 構成に応じて `apps/core/Dockerfile`、`apps/admin/Dockerfile` とします。
 
+この repo の M1 skeleton では monorepo root に次を置きます。
+
+- `Dockerfile.core`: Python core / scheduled jobs image。`spautopost` CLI と PostgreSQL extra を含む。
+- `Dockerfile.admin`: TypeScript / Node.js Admin API skeleton image。
+- `scripts/aca-job-entrypoint.sh`: Container Apps Jobs から dry-run / collect / generate / publish-approved を dispatch する wrapper。
+
 ## GitHub Actions Skeleton
 
 M1 では build / test / container image build の skeleton を作ります。
@@ -109,6 +116,21 @@ M1 では build / test / container image build の skeleton を作ります。
 - LLM provider selection
 - dry-run / publish flag
 - Entra ID admin auth setting
+
+local / hosted の分離:
+
+- local: `config.local.example.yml` を `config/default.yml` にコピーし、SQLite と dry-run を使う。
+- hosted: `config.hosted.example.yml` を基に、PostgreSQL と Azure 側の environment variables / secret references を使う。
+- Secret 実値は repo に保存しない。設定ファイルには `env:NAME` 参照のみを書く。
+
+Container Apps Jobs command 例:
+
+```sh
+aca-job-entrypoint dry-run --env production --config-dir /app/config
+aca-job-entrypoint collect --env production --config-dir /app/config
+aca-job-entrypoint generate --env production --config-dir /app/config
+aca-job-entrypoint publish-approved --env production --config-dir /app/config
+```
 
 ## Non-Goals
 

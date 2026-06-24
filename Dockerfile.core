@@ -1,0 +1,21 @@
+FROM python:3.12-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    SPAUTOPOST_ENV=production
+
+WORKDIR /app
+
+COPY pyproject.toml README.md ./
+COPY src ./src
+RUN mkdir -p config
+COPY config.hosted.example.yml ./config/default.yml
+
+RUN pip install --no-cache-dir --upgrade pip \
+    && pip install --no-cache-dir ".[postgres]"
+
+COPY scripts/aca-job-entrypoint.sh /usr/local/bin/aca-job-entrypoint
+RUN chmod +x /usr/local/bin/aca-job-entrypoint
+
+ENTRYPOINT ["aca-job-entrypoint"]
+CMD ["dry-run"]

@@ -1,0 +1,14 @@
+.git
+.venv
+node_modules
+admin-api/dist
+__pycache__
+*.py[cod]
+.pytest_cache
+.ruff_cache
+.mypy_cache
+.coverage
+htmlcov
+coverage.xml
+data
+config/*.yml

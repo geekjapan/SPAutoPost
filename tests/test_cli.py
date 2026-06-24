@@ -150,6 +150,80 @@ def test_run_sample_source_job_generates_draft(
     assert preview["source_record_ids"][0].startswith("sample-src-")
 
 
+def test_collect_advisories_uses_safe_sample_source_job(
+    config_dir: Path,
+    valid_environ: dict[str, str],
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    _set_env(monkeypatch, valid_environ)
+    _write_sqlite_config(config_dir, tmp_path / "collect-job.sqlite3")
+
+    code = main(["--config-dir", str(config_dir), "collect-advisories"])
+
+    preview = json.loads(capsys.readouterr().out)
+    assert code == 0
+    assert preview["generated_count"] == 1
+    assert preview["draft_ids"] == ["draft-sample-advisory-sample-2026-0001"]
+
+
+def test_dry_run_job_reports_no_external_calls(
+    config_dir: Path,
+    valid_environ: dict[str, str],
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    _set_env(monkeypatch, valid_environ)
+
+    code = main(["--config-dir", str(config_dir), "--dry-run", "dry-run-job"])
+
+    preview = json.loads(capsys.readouterr().out)
+    assert code == 0
+    assert preview["job"] == "dry-run"
+    assert preview["status"] == "ok"
+    assert preview["dry_run"] is True
+    assert preview["external_calls"] is False
+    assert preview["publish_attempted"] is False
+
+
+def test_generate_drafts_job_is_noop_stub(
+    config_dir: Path,
+    valid_environ: dict[str, str],
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    _set_env(monkeypatch, valid_environ)
+
+    code = main(["--config-dir", str(config_dir), "--dry-run", "generate-drafts"])
+
+    preview = json.loads(capsys.readouterr().out)
+    assert code == 0
+    assert preview["job"] == "generate-drafts"
+    assert preview["status"] == "stub"
+    assert preview["external_calls"] is False
+    assert preview["generated_count"] == 0
+
+
+def test_publish_approved_job_never_publishes_in_skeleton(
+    config_dir: Path,
+    valid_environ: dict[str, str],
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    _set_env(monkeypatch, valid_environ)
+
+    code = main(["--config-dir", str(config_dir), "--no-dry-run", "publish-approved"])
+
+    preview = json.loads(capsys.readouterr().out)
+    assert code == 0
+    assert preview["job"] == "publish-approved"
+    assert preview["status"] == "stub"
+    assert preview["dry_run"] is False
+    assert preview["publish_attempted"] is False
+    assert preview["sharepoint_mutation"] is False
+
+
 def test_import_advisory_dry_run_preview(
     config_dir: Path,
     valid_environ: dict[str, str],
