@@ -2,7 +2,9 @@
 
 ## Status
 
-Proposed
+Accepted for M0
+
+config 構造・環境変数・database provider 分離・secret 参照・feature flag・dry-run の基礎契約は Issue #4 の application skeleton change（configuration capability）で確定・archive 済み。詳細は `docs/design-documents.md` の Review & Status Matrix (Issue #23) を参照。
 
 ## Purpose
 

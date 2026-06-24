@@ -1,49 +1,49 @@
 ## ADDED Requirements
 
-### Requirement: Central review matrix covers Issue #23 target documents
+### Requirement: M0 Accepted document set is identified
 
-`docs/design-documents.md` SHALL include a central review matrix for the document set listed in GitHub Issue #23. The matrix SHALL preserve each document's current Status while adding the Issue #23 review result needed for M0 planning.
+Detailed design document review (Issue #23) SHALL identify the document set accepted for M0 in the central review matrix. The M0 Accepted set SHALL include only documents whose core decision is already backed by an Accepted ADR or merged/archived OpenSpec change and does not require a human-gated decision. At minimum, it SHALL identify `docs/specs/sharepoint-publishing.md` (MVP publishing mode backed by Accepted ADR `2026-06-22-sharepoint-list-vs-site-page.md`; remaining details route to #2), `docs/specs/data-model.md` (#3), `docs/specs/configuration.md` (#4), and `docs/decisions/2026-06-22-sharepoint-list-vs-site-page.md` as M0 Accepted. Documents whose core decision still depends on an open owning Issue, such as security/secrets/audit baseline (#5), LLM provider strategy (#15), and Graph auth model (#27), SHALL NOT be flipped to M0 Accepted before that Issue is resolved.
 
-#### Scenario: Issue #23 target document is reviewed
-- **WHEN** an implementation agent opens `docs/design-documents.md`
-- **THEN** the agent can see every Issue #23 target document with its current status, M0 review result, deferred milestone if any, and related follow-up Issue references
+#### Scenario: M0 Accepted documents are found from the central matrix
+- **WHEN** an implementation agent checks which design documents are accepted for M0
+- **THEN** the agent can identify the M0 Accepted set from `docs/design-documents.md` and see that the document status labels are consistent with the matrix buckets
 
-### Requirement: M0 accepted and near-accepted documents are identified
+### Requirement: M1+ deferred document set is identified
 
-The central review matrix SHALL identify documents that are Accepted or near-Accepted for M0 foundation use. Near-Accepted SHALL mean the document is usable for implementation orientation while one or more scoped follow-up Issues still own remaining details.
+The review SHALL identify Proposed, Draft, or Deferred documents whose detailed acceptance belongs to M1 or later milestones. Each M1+ document SHALL be mapped to its owning milestone and existing tracking Issues in the central matrix.
 
-#### Scenario: M0 planning needs a usable design source
-- **WHEN** an agent needs to know which design documents can guide M0 / M1 implementation
-- **THEN** the matrix distinguishes Accepted / near-Accepted documents from documents deferred to later milestones
+#### Scenario: Later-milestone documents have tracked owners
+- **WHEN** an implementation agent checks which design documents are finalized after M0
+- **THEN** the matrix identifies documents such as `llm-provider.md` (#15/M3), `draft-composition.md` (#8/M3), `source-collection.md` (#11-#13/M2), `normalization-and-triage.md` (#14/M2), `review-approval-workflow.md` (#19/M4), `external-collector-boundary.md` (#21/M5), `error-handling.md` (#20/#22), and runbooks (#22/M6), each with milestone and Issue routing
 
-### Requirement: M1+ deferred documents are identified
+### Requirement: SharePoint remaining unresolved items consolidate to Issue #2
 
-The central review matrix SHALL identify documents whose detailed acceptance belongs to M1 or later milestones. Each deferred row SHALL link existing follow-up Issues when the owner is already clear.
+SharePoint board-contract unresolved items SHALL be routed to Issue #2 and visible from the central review matrix. The review SHALL NOT reopen the already accepted MVP decision to use SharePoint Site Page / News instead of SharePoint List item as the primary posting mode. The review SHALL NOT decide the remaining #2 contract details; it SHALL only route them.
 
-#### Scenario: Later milestone detail is not decided in M0
-- **WHEN** a design detail belongs to M1 or later
-- **THEN** the matrix records that the document is deferred and points to the existing Issue rather than deciding the detail in Issue #23
+#### Scenario: SharePoint remaining open items route to #2
+- **WHEN** an implementation agent checks remaining SharePoint open items such as News promote, attachments/images, publication scope, Graph permissions, delegated/application/managed identity, or failure behavior
+- **THEN** the central matrix and the related `sharepoint-publishing.md`, sharepoint ADR, and `graph-authentication.md` references route those remaining items to Issue #2 while preserving Site Page / News as the accepted MVP posting mode
 
-### Requirement: SharePoint unresolved decisions route to Issue #2
+### Requirement: LLM provider strategy unresolved items consolidate to Issue #15
 
-SharePoint publishing and board-contract unresolved decisions SHALL be routed to GitHub Issue #2. This change SHALL NOT decide the remaining SharePoint board contract, Graph permission, draft / publish, publish / promote, attachment, image, or publication-scope details.
+LLM provider strategy unresolved items, including production/test provider separation, provider contracts, input-data restrictions, and provider switching policy, SHALL route to Issue #15 and be visible from the central matrix. This review SHALL NOT decide the Issue #15 provider strategy; it SHALL only route it.
 
-#### Scenario: SharePoint publishing open question is found
-- **WHEN** the matrix or target document mentions unresolved SharePoint publishing details
-- **THEN** the follow-up route is Issue #2, with implementation Issues such as #9, #20, or #36 referenced only when already applicable
+#### Scenario: LLM provider unresolved items route to #15
+- **WHEN** an implementation agent checks LLM provider strategy open items
+- **THEN** the central matrix and the related `llm-provider.md`, `security-baseline.md`, and LLM provider strategy ADR references route them to Issue #15
 
-### Requirement: LLM strategy unresolved decisions route to Issue #15
+### Requirement: Implementation-before-spec gaps are issue-tracked without speculative issues
 
-LLM provider strategy unresolved decisions SHALL be routed to GitHub Issue #15. This change SHALL NOT decide production provider selection, test provider policy beyond existing docs, provider contract, cost, UI automation, or production data handling.
+The review SHALL confirm and record that spec gaps needed before implementation are tied to existing tracking Issues. M0 unresolved spec gaps (SharePoint remaining contract #2, security/secrets/audit/compliance baseline #5, Graph auth model #27) SHALL be recorded in the central matrix. When an existing Issue clearly represents a gap, the review SHALL NOT create a new Issue. The review SHALL NOT create speculative Issues.
 
-#### Scenario: LLM provider strategy open question is found
-- **WHEN** the matrix or target document mentions unresolved LLM provider strategy details
-- **THEN** the follow-up route is Issue #15, with implementation or spike Issues such as #6, #18, or #35 referenced only when already applicable
+#### Scenario: Spec gaps are tracked by existing Issues
+- **WHEN** an implementation agent checks spec gaps needed before implementation
+- **THEN** each gap is traceable from the central matrix to existing Issues (M0 spec: #2 / #5 / #27; later specs: #11-#22 / #32-#36), and no speculative Issue is created
 
-### Requirement: Implementation-before-spec gaps link existing Issues only
+### Requirement: Central review matrix is the canonical review record
 
-The review matrix SHALL identify implementation-before-spec gaps only when they can be tied to existing GitHub Issues. This change SHALL NOT create speculative follow-up Issues.
+The central review record for detailed design document review SHALL be `docs/design-documents.md`'s Review & Status Matrix. The review SHALL NOT duplicate field tables, spec bodies, or long specification text into a second document. Each document's M0 disposition SHALL be available from this central matrix as the single review record.
 
-#### Scenario: Existing implementation precedes final spec acceptance
-- **WHEN** a target document has related implementation work that is already complete or in progress before the document is fully Accepted
-- **THEN** the matrix links the existing Issue that owns reconciliation or follow-up, and does not invent a new Issue
+#### Scenario: Central matrix is used as the single review record
+- **WHEN** an implementation agent checks the overall M0 disposition of the design document set
+- **THEN** `docs/design-documents.md`'s Review & Status Matrix is the single review record listing each document's status bucket, owning milestone, tracking Issues, and route target without duplicating spec bodies
