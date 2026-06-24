@@ -127,9 +127,7 @@ class MockLLMProvider:
         return self._metadata
 
 
-def build_llm_provider(
-    config: LLMConfig, *, fixture: DraftOutput | None = None
-) -> LLMProvider:
+def build_llm_provider(config: LLMConfig, *, fixture: DraftOutput | None = None) -> LLMProvider:
     """検証済み LLMConfig から provider を構築する。"""
     if config.provider == "test_mock":
         return MockLLMProvider(fixture=fixture, prompt_version=config.prompt_version)
