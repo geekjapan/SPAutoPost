@@ -15,5 +15,5 @@
 - [x] 3.1 `openspec validate issue-23-review-finalize-detailed-design-documents --strict` を通す
 - [x] 3.2 `openspec validate --changes --strict` を通す
 - [x] 3.3 `git diff --check` を通す
-- [ ] 3.4 Conventional commit を作成し、branch を push する
-- [ ] 3.5 PR を作成する
+- [x] 3.4 Conventional commit を作成し、branch を push する
+- [x] 3.5 PR を作成する
