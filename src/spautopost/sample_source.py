@@ -8,13 +8,14 @@ from __future__ import annotations
 
 import hashlib
 import json
+import uuid
 from collections.abc import Mapping, Sequence
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
 from typing import Any, cast
 
 from .llm import DraftInput, LLMProvider, TargetAudience, Urgency
-from .storage.models import Advisory, DraftPost, Severity, SourceRecord
+from .storage.models import Advisory, AuditEvent, DraftPost, Severity, SourceRecord
 from .storage.port import StoragePort
 
 SAMPLE_SOURCE_NAME = "sample-source"
@@ -49,6 +50,7 @@ class SampleSourceJobResult:
     source_record: SourceRecord
     advisory: Advisory
     draft_post: DraftPost
+    audit_events: Sequence[AuditEvent] = ()
 
 
 def fetch_sample_source_candidates() -> tuple[SampleSourceCandidate, ...]:
@@ -128,50 +130,77 @@ def run_sample_source_job(
     timestamp = _utc_now(now)
     metadata = provider.get_provider_metadata()
     prompt_version = metadata.prompt_version or SAMPLE_DEFAULT_PROMPT_VERSION
+    correlation_id = uuid.uuid4().hex
     results: list[SampleSourceJobResult] = []
 
     for candidate in fetch_sample_source_candidates():
         source_record, advisory = advisory_from_sample_candidate(candidate, now=timestamp)
-        draft_output = provider.generate_draft(
-            DraftInput(
-                advisory=_json_ready(asdict(advisory)),
-                target_audience=SAMPLE_TARGET_AUDIENCE,
-                target_language=SAMPLE_TARGET_LANGUAGE,
-                urgency=SAMPLE_URGENCY,
-                template_id=SAMPLE_TEMPLATE_ID,
-                prompt_version=prompt_version,
-                references=[dict(ref) for ref in advisory.references],
+        draft_id = f"draft-{advisory.advisory_id}"
+        audit_events = [
+            _source_fetch_audit_event(
+                source_record=source_record,
+                advisory=advisory,
+                correlation_id=correlation_id,
+                now=timestamp,
             )
-        )
-        draft = DraftPost(
-            draft_id=f"draft-{advisory.advisory_id}",
-            title=draft_output.title,
-            audience=SAMPLE_TARGET_AUDIENCE,
-            urgency=SAMPLE_URGENCY,
-            summary_for_users=draft_output.summary_for_users,
-            impact=draft_output.impact,
-            status="generated",
-            created_at=timestamp,
-            updated_at=timestamp,
-            advisory_id=advisory.advisory_id,
-            advisory_ids=(advisory.advisory_id,),
-            required_actions=tuple(draft_output.required_actions),
-            admin_actions=tuple(draft_output.admin_actions),
-            references=tuple(draft_output.references),
-            generated_by_provider=metadata.provider_name,
-            prompt_version=prompt_version,
-            generation_input_hash=draft_output.generation_input_hash,
-            validation_warnings=(
-                *draft_output.warnings,
-                *draft_output.uncertainty_notes,
-                *draft_output.validation_hints,
-            ),
-        )
+        ]
+        existing_draft = storage.draft_posts.get(draft_id)
+        if existing_draft is None:
+            draft_output = provider.generate_draft(
+                DraftInput(
+                    advisory=_json_ready(asdict(advisory)),
+                    target_audience=SAMPLE_TARGET_AUDIENCE,
+                    target_language=SAMPLE_TARGET_LANGUAGE,
+                    urgency=SAMPLE_URGENCY,
+                    template_id=SAMPLE_TEMPLATE_ID,
+                    prompt_version=prompt_version,
+                    references=[dict(ref) for ref in advisory.references],
+                )
+            )
+            draft = DraftPost(
+                draft_id=draft_id,
+                title=draft_output.title,
+                audience=SAMPLE_TARGET_AUDIENCE,
+                urgency=SAMPLE_URGENCY,
+                summary_for_users=draft_output.summary_for_users,
+                impact=draft_output.impact,
+                status="generated",
+                created_at=timestamp,
+                updated_at=timestamp,
+                advisory_id=advisory.advisory_id,
+                advisory_ids=(advisory.advisory_id,),
+                required_actions=tuple(draft_output.required_actions),
+                admin_actions=tuple(draft_output.admin_actions),
+                references=tuple(draft_output.references),
+                generated_by_provider=metadata.provider_name,
+                prompt_version=prompt_version,
+                generation_input_hash=draft_output.generation_input_hash,
+                validation_warnings=(
+                    *draft_output.warnings,
+                    *draft_output.uncertainty_notes,
+                    *draft_output.validation_hints,
+                ),
+            )
+            audit_events.append(
+                _draft_generate_audit_event(
+                    provider_name=metadata.provider_name,
+                    provider_type=metadata.provider_type,
+                    prompt_version=prompt_version,
+                    source_record=source_record,
+                    advisory=advisory,
+                    draft=draft,
+                    correlation_id=correlation_id,
+                    now=timestamp,
+                )
+            )
+        else:
+            draft = existing_draft
         results.append(
             SampleSourceJobResult(
                 source_record=source_record,
                 advisory=advisory,
                 draft_post=draft,
+                audit_events=tuple(audit_events),
             )
         )
 
@@ -179,8 +208,64 @@ def run_sample_source_job(
         for result in results:
             storage.source_records.upsert(result.source_record)
             storage.advisories.upsert(result.advisory)
-            storage.draft_posts.upsert(result.draft_post)
+            if storage.draft_posts.get(result.draft_post.draft_id) is None:
+                storage.draft_posts.upsert(result.draft_post)
+            for event in result.audit_events:
+                storage.audit_events.append(event)
     return tuple(results)
+
+
+def _source_fetch_audit_event(
+    *,
+    source_record: SourceRecord,
+    advisory: Advisory,
+    correlation_id: str,
+    now: datetime,
+) -> AuditEvent:
+    return AuditEvent(
+        audit_event_id=uuid.uuid4().hex,
+        event_type="source_fetch",
+        correlation_id=correlation_id,
+        result="success",
+        created_at=now,
+        source_name=source_record.source_name,
+        related_ids={
+            "source_record_id": source_record.source_record_id,
+            "advisory_id": advisory.advisory_id,
+        },
+    )
+
+
+def _draft_generate_audit_event(
+    *,
+    provider_name: str,
+    provider_type: str,
+    prompt_version: str,
+    source_record: SourceRecord,
+    advisory: Advisory,
+    draft: DraftPost,
+    correlation_id: str,
+    now: datetime,
+) -> AuditEvent:
+    related_ids: dict[str, object] = {
+        "source_record_id": source_record.source_record_id,
+        "advisory_id": advisory.advisory_id,
+        "draft_id": draft.draft_id,
+    }
+    if draft.generation_input_hash:
+        related_ids["generation_input_hash"] = draft.generation_input_hash
+    return AuditEvent(
+        audit_event_id=uuid.uuid4().hex,
+        event_type="draft_generate",
+        correlation_id=correlation_id,
+        result="success",
+        created_at=now,
+        source_name=source_record.source_name,
+        provider_name=provider_name,
+        provider_type=provider_type,
+        prompt_version=prompt_version,
+        related_ids=related_ids,
+    )
 
 
 def _candidate_payload(candidate: SampleSourceCandidate) -> dict[str, Any]:

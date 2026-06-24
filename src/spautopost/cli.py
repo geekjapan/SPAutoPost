@@ -307,15 +307,17 @@ def _run_migrate(config: Config, dry_run: bool) -> int:
 
 def _run_sample_source_job(config: Config, dry_run: bool) -> int:
     """scheduled job skeleton: sample source を取得し DraftPost 生成まで実行する。"""
-    from .llm import LLMProviderConfigError, build_llm_provider
+    from .llm import MockLLMProvider
     from .sample_source import run_sample_source_job
     from .storage.errors import StorageError
     from .storage.factory import build_storage
 
     try:
         storage = build_storage(config.storage)
-        provider = build_llm_provider(config.llm)
-    except (StorageError, LLMProviderConfigError) as exc:
+        provider = MockLLMProvider(
+            prompt_version=config.llm.prompt_version or DEFAULT_PROMPT_VERSION
+        )
+    except StorageError as exc:
         print(f"sample source job init failed: {exc}", file=sys.stderr)
         return EXIT_RUNTIME_ERROR
 
