@@ -34,11 +34,11 @@
 
 ### Requirement: AI 生成の provenance メタデータ
 
-システムは AI が生成した `DraftPost` に対し、生成の素性を追跡できるメタデータを保持しなければならない（SHALL）。最低限 `generated_by_provider`（provider 名）、`provider_type`（`production_api` / `production_flow` / `generic_api` / `test_mock` / `test_manual`）、`prompt_version`、`generation_input_hash` を記録できなければならない（SHALL）。`generation_input_hash` は AI に渡した正規化済み入力から決定的に導出しなければならない（SHALL）。
+システムは AI が生成した `DraftPost` に対し、生成の素性を追跡できるメタデータを保持しなければならない（SHALL）。最低限 `generated_by_provider`（provider 名）、`prompt_version`、`generation_input_hash` を記録できなければならない（SHALL）。`provider_type`（`production_api` / `production_flow` / `generic_api` / `test_mock` / `test_manual`）は保存先が対応する場合に `DraftPost` または関連 `AuditEvent` / 実行メタデータで記録できるべきである（SHOULD）。`generation_input_hash` は AI に渡した正規化済み入力から決定的に導出しなければならない（SHALL）。
 
 #### Scenario: 生成 provenance を記録する
 - **WHEN** AI provider が `DraftPost` を生成する
-- **THEN** provider 名・provider type・prompt version・generation_input_hash を当該 `DraftPost` に記録できる
+- **THEN** provider 名・prompt version・generation_input_hash を当該 `DraftPost` に記録でき、保存先が対応する場合は provider type も関連付けて記録できる
 
 #### Scenario: 同一入力が同一 input hash になる
 - **WHEN** 同一の正規化済み入力で生成を 2 回行う
