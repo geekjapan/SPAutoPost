@@ -146,3 +146,26 @@ def test_sharepoint_composition_template_records_guardrails() -> None:
     assert all(
         "exploit 手順" not in text for text in (*draft.required_actions, *draft.admin_actions)
     )
+
+
+def test_sharepoint_composition_template_normalizes_review_flags() -> None:
+    draft_input = DraftInput(
+        advisory={
+            "title": "重複製品の注意喚起",
+            "affected_products": ["Example Product", "Example Product"],
+            "patch_available": " UNKNOWN ",
+            "exploit_status": "Unknown",
+        },
+        target_audience="mixed",
+        target_language="ja-JP",
+        urgency="normal",
+        template_id="sharepoint-m1",
+        prompt_version="v1",
+        references=({"label": "Vendor advisory", "url": "https://example.test/advisory"},),
+    )
+
+    draft = compose_sharepoint_draft(draft_input)
+
+    assert draft.impact.count("Example Product") == 1
+    assert "patch availability が不明です。" in draft.uncertainty_notes
+    assert "exploit status が不明です。" in draft.uncertainty_notes

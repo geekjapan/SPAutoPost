@@ -85,7 +85,7 @@ def _list_text(value: object) -> tuple[str, ...]:
             product = item.get("product") or item.get("name")
             if isinstance(product, str) and product.strip():
                 items.append(product.strip())
-    return tuple(items)
+    return tuple(dict.fromkeys(items))
 
 
 def _deadline(advisory: Mapping[str, object]) -> str | None:
@@ -120,6 +120,8 @@ def _admin_actions(advisory: Mapping[str, object], products: Sequence[str]) -> t
         "公式出典を確認し、必要な更新、回避策、利用者案内を実施してください。",
     ]
     patch_available = advisory.get("patch_available")
+    if isinstance(patch_available, str):
+        patch_available = patch_available.strip().lower()
     if patch_available == "unknown" or patch_available is None:
         actions.append("patch availability が不明な場合は reviewer warning として扱ってください。")
     return tuple(actions)
@@ -131,9 +133,15 @@ def _uncertainty_notes(advisory: Mapping[str, object], deadline: str | None) -> 
         notes.append("対象製品が不明です。")
     if deadline is None:
         notes.append("対応期限が不明です。")
-    if advisory.get("patch_available") in (None, "unknown"):
+    patch_available = advisory.get("patch_available")
+    if isinstance(patch_available, str):
+        patch_available = patch_available.strip().lower()
+    if patch_available in (None, "unknown"):
         notes.append("patch availability が不明です。")
-    if advisory.get("exploit_status") in (None, "unknown"):
+    exploit_status = advisory.get("exploit_status")
+    if isinstance(exploit_status, str):
+        exploit_status = exploit_status.strip().lower()
+    if exploit_status in (None, "unknown"):
         notes.append("exploit status が不明です。")
     return tuple(notes)
 
