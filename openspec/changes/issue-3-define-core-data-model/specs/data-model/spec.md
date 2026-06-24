@@ -46,14 +46,14 @@
 
 ### Requirement: external collector 分離後も使える input model
 
-システムは将来 crawler / collector を分離した場合でも、正規化済み advisory を import して同一の `Advisory` モデルへ変換できる input model を維持しなければならない（SHALL）。import schema は最低限 `schema_version` / `producer` / `generated_at` と advisory 配列を含み、各 advisory は `title` / `summary` / `references` と enum 制約済みフィールドを持たなければならない（SHALL、詳細は `docs/specs/external-collector-boundary.md` を normative reference とする）。import は `producer` と `external_advisory_id` の組み合わせ、または `source_url` や `raw_hash` により一意に重複を識別できなければならない（SHALL）。`cve_ids` / `jvn_ids` は関連付けと検索のための属性であり、それだけを dedupe 主キーとして扱ってはならない（SHALL NOT）。
+システムは将来 crawler / collector を分離した場合でも、正規化済み advisory を import して同一の `Advisory` モデルへ変換できる input model を維持しなければならない（SHALL）。import schema は最低限 `schema_version` / `producer` / `generated_at` と advisory 配列を含み、各 advisory は `title` / `summary` / `references` と enum 制約済みフィールドを持たなければならない（SHALL、詳細は `docs/specs/external-collector-boundary.md` を normative reference とする）。import は `producer` と import schema 上の `advisory_id`（外部 advisory ID）の組み合わせ、または `source_url` や `raw_hash` により一意に重複を識別できなければならない（SHALL）。`cve_ids` / `jvn_ids` は関連付けと検索のための属性であり、それだけを dedupe 主キーとして扱ってはならない（SHALL NOT）。
 
 #### Scenario: 正規化済み import が Advisory に変換される
 - **WHEN** external collector が `schema_version` 付きの正規化済み advisory を file import する
 - **THEN** 各レコードは内部 `Advisory` モデル（`source_refs` 付き）へ変換でき、ランタイムの後続処理（draft composition 以降）が collector の有無に依存しない
 
 #### Scenario: import の重複を識別できる
-- **WHEN** 同一 producer から同一 external_advisory_id を持つレコードを再 import する
+- **WHEN** 同一 producer から同一 advisory_id を持つレコードを再 import する
 - **THEN** 重複として識別できる
 
 ### Requirement: データモデルに Secret を保存しない
