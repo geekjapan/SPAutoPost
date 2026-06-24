@@ -19,6 +19,7 @@ import pytest
 from spautopost.storage.errors import ConstraintViolationError
 
 from .contract_factories import (
+    make_admin_command,
     make_advisory,
     make_audit_event,
     make_draft_post,
@@ -123,6 +124,80 @@ def test_get_by_idempotency_key(storage: StoragePort) -> None:
     found = storage.publications.get_by_idempotency_key("idem-9")
     assert found is not None and found.publication_id == "pub-1"
     assert storage.publications.get_by_idempotency_key("missing") is None
+
+
+# --- AdminCommand queue ----------------------------------------------------
+
+
+def test_admin_command_claim_is_exclusive(storage: StoragePort) -> None:
+    storage.draft_posts.upsert(make_draft_post(draft_id="draft-1"))
+    for i in range(3):
+        storage.admin_commands.append(
+            make_admin_command(command_id=f"cmd-{i}", idempotency_key=f"cmd-idem-{i}")
+        )
+
+    first = storage.admin_commands.claim_pending(limit=2)
+    second = storage.admin_commands.claim_pending(limit=2)
+
+    first_ids = {command.command_id for command in first}
+    second_ids = {command.command_id for command in second}
+    assert first_ids.isdisjoint(second_ids)
+    assert len(first_ids) == 2
+    assert len(second_ids) == 1
+    assert all(command.status == "processing" for command in [*first, *second])
+
+
+def test_admin_command_complete_and_fail(storage: StoragePort) -> None:
+    storage.draft_posts.upsert(make_draft_post(draft_id="draft-1"))
+    storage.admin_commands.append(make_admin_command(command_id="cmd-ok", idempotency_key="ok"))
+    storage.admin_commands.append(make_admin_command(command_id="cmd-fail", idempotency_key="fail"))
+
+    storage.admin_commands.complete("cmd-ok")
+    storage.admin_commands.fail("cmd-fail", error_code="E_BOOM", error_message="exploded")
+
+    completed = storage.admin_commands.get("cmd-ok")
+    failed = storage.admin_commands.get("cmd-fail")
+    assert completed is not None
+    assert completed.status == "succeeded"
+    assert completed.processed_at is not None
+    assert failed is not None
+    assert failed.status == "failed"
+    assert failed.error_code == "E_BOOM"
+    assert failed.error_message == "exploded"
+    assert failed.processed_at is not None
+
+
+def test_admin_command_duplicate_idempotency_rejected(storage: StoragePort) -> None:
+    storage.draft_posts.upsert(make_draft_post(draft_id="draft-1"))
+    storage.admin_commands.append(make_admin_command(command_id="cmd-1", idempotency_key="same"))
+    with pytest.raises(ConstraintViolationError):
+        storage.admin_commands.append(
+            make_admin_command(command_id="cmd-2", idempotency_key="same")
+        )
+
+
+def test_publication_and_admin_command_idempotency_scopes_are_independent(
+    storage: StoragePort,
+) -> None:
+    storage.draft_posts.upsert(make_draft_post(draft_id="draft-1"))
+    storage.publications.upsert(make_publication(publication_id="pub-1", idempotency_key="shared"))
+    storage.admin_commands.append(make_admin_command(command_id="cmd-1", idempotency_key="shared"))
+
+    assert storage.publications.get_by_idempotency_key("shared") is not None
+    assert storage.admin_commands.get("cmd-1") is not None
+
+
+def test_admin_command_payload_rejects_secret_keys(storage: StoragePort) -> None:
+    storage.draft_posts.upsert(make_draft_post(draft_id="draft-1"))
+
+    with pytest.raises(ConstraintViolationError, match="payload"):
+        storage.admin_commands.append(
+            make_admin_command(
+                command_id="cmd-secret",
+                idempotency_key="secret",
+                payload={"access_token": "secret-token"},
+            )
+        )
 
 
 # --- timestamp 往復 --------------------------------------------------------

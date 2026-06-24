@@ -14,7 +14,7 @@ docs/specs/sharepoint-publishing.md と本 change の spec。
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass, fields
+from dataclasses import dataclass, field, fields
 from datetime import UTC, datetime
 from typing import Literal, get_args
 
@@ -51,6 +51,10 @@ PublicationStatus = Literal["pending", "dry_run", "publishing", "published", "fa
 
 PublicationOperation = Literal["dry-run", "create", "update", "publish"]
 
+AdminCommandType = Literal["edit", "approve", "reject", "request_regeneration", "publish_request"]
+
+AdminCommandStatus = Literal["pending", "processing", "succeeded", "failed", "cancelled"]
+
 # audit-log.md の 15 値（本 change の正本）。
 AuditEventType = Literal[
     "source_fetch",
@@ -80,6 +84,21 @@ PUBLICATION_OPERATIONS: tuple[str, ...] = get_args(PublicationOperation)
 REVIEW_ACTIONS: tuple[str, ...] = get_args(ReviewAction)
 SOURCE_TYPES: tuple[str, ...] = get_args(SourceType)
 TARGET_TYPES: tuple[str, ...] = get_args(TargetType)
+ADMIN_COMMAND_TYPES: tuple[str, ...] = get_args(AdminCommandType)
+ADMIN_COMMAND_STATUSES: tuple[str, ...] = get_args(AdminCommandStatus)
+
+_SECRET_KEY_FRAGMENTS: tuple[str, ...] = (
+    "api_key",
+    "apikey",
+    "access_token",
+    "refreshtoken",
+    "refresh_token",
+    "client_secret",
+    "private_key",
+    "password",
+    "cookie",
+    "authorization",
+)
 
 
 # --- tz-aware UTC 境界検査 -------------------------------------------------
@@ -107,6 +126,20 @@ def _validate_timestamps(instance: object) -> None:
         raw = getattr(instance, f.name)
         if isinstance(raw, datetime):
             object.__setattr__(instance, f.name, ensure_utc(raw, f.name))
+
+
+def _contains_secret_key(value: object) -> bool:
+    """JSON-like value に secret 由来の key が含まれるか再帰的に検査する。"""
+    if isinstance(value, Mapping):
+        for key, nested in value.items():
+            normalized = str(key).lower().replace("-", "_")
+            if any(fragment in normalized for fragment in _SECRET_KEY_FRAGMENTS):
+                return True
+            if _contains_secret_key(nested):
+                return True
+    elif isinstance(value, Sequence) and not isinstance(value, (str, bytes, bytearray)):
+        return any(_contains_secret_key(item) for item in value)
+    return False
 
 
 # --- DTO -------------------------------------------------------------------
@@ -278,3 +311,34 @@ class AuditEvent:
                 f"audit_events.event_type must be one of the 15 audit-log values; "
                 f"got {self.event_type!r}"
             )
+
+
+@dataclass(frozen=True)
+class AdminCommand:
+    """Admin UI/API から Python core への非同期 command inbox。
+
+    payload は Secret を保持してはならない。storage 境界で secret 由来の key を
+    検出した場合は保存せず ``ConstraintViolationError`` を送出する。
+    """
+
+    command_id: str
+    command_type: AdminCommandType
+    idempotency_key: str
+    created_at: datetime
+    target_draft_id: str | None = None
+    requested_by: str | None = None
+    payload: Mapping[str, object] = field(default_factory=dict)
+    status: AdminCommandStatus = "pending"
+    error_code: str | None = None
+    error_message: str | None = None
+    correlation_id: str | None = None
+    processed_at: datetime | None = None
+
+    def __post_init__(self) -> None:
+        _validate_timestamps(self)
+        if not self.idempotency_key or not self.idempotency_key.strip():
+            raise ConstraintViolationError(
+                "admin_commands.idempotency_key must be a non-empty, non-blank string"
+            )
+        if _contains_secret_key(self.payload):
+            raise ConstraintViolationError("admin_commands.payload must not contain secret keys")

@@ -47,6 +47,7 @@ _PG_DATA_TABLES = (
     "review_events",
     "publications",
     "audit_events",
+    "admin_commands",
 )
 
 

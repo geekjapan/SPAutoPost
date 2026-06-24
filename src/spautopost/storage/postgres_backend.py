@@ -25,12 +25,13 @@ from contextlib import contextmanager
 from dataclasses import fields
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from .errors import ConstraintViolationError, StorageError
 from .migrate import DEFAULT_MIGRATIONS_ROOT, run_migrations
 from .migrate import pending_migrations as _pending_migrations
 from .models import (
+    AdminCommand,
     Advisory,
     AuditEvent,
     DraftPost,
@@ -56,6 +57,7 @@ _JSON_FIELDS: frozenset[str] = frozenset(
         "validation_warnings",
         "review_comments",
         "related_ids",
+        "payload",
     }
 )
 
@@ -283,6 +285,72 @@ class _PublicationRepository(_Repository):
         return self._row_to_dto(row) if row is not None else None
 
 
+class _AdminCommandRepository(_Repository):
+    """admin_commands 用 repository (append-only queue + SKIP LOCKED claim)。"""
+
+    def append(self, command: AdminCommand) -> AdminCommand:
+        return cast(AdminCommand, self._insert(command, on_conflict_update=False))
+
+    def claim_pending(self, *, limit: int = 100) -> Sequence[AdminCommand]:
+        try:
+            with self._conn.cursor() as cur:
+                cur.execute(
+                    f"SELECT * FROM {self._table} "  # noqa: S608
+                    "WHERE status = 'pending' "
+                    f"ORDER BY created_at ASC, command_id ASC LIMIT {_PLACEHOLDER} "
+                    "FOR UPDATE SKIP LOCKED",
+                    (limit,),
+                )
+                rows = cur.fetchall()
+                ids = [row["command_id"] for row in rows]
+                if ids:
+                    cur.execute(
+                        f"UPDATE {self._table} SET status = 'processing' "  # noqa: S608
+                        f"WHERE command_id = ANY({_PLACEHOLDER})",
+                        (ids,),
+                    )
+            self._maybe_commit()
+        except Exception:
+            self._maybe_rollback()
+            raise
+        return [self._row_to_dto(dict(row) | {"status": "processing"}) for row in rows]
+
+    def complete(self, command_id: str) -> None:
+        self._finish(command_id, status="succeeded")
+
+    def fail(
+        self,
+        command_id: str,
+        *,
+        error_code: str | None = None,
+        error_message: str | None = None,
+    ) -> None:
+        self._finish(
+            command_id,
+            status="failed",
+            error_code=error_code,
+            error_message=error_message,
+        )
+
+    def _finish(
+        self,
+        command_id: str,
+        *,
+        status: str,
+        error_code: str | None = None,
+        error_message: str | None = None,
+    ) -> None:
+        with self._conn.cursor() as cur:
+            cur.execute(
+                f"UPDATE {self._table} "  # noqa: S608
+                f"SET status = {_PLACEHOLDER}, error_code = {_PLACEHOLDER}, "
+                f"error_message = {_PLACEHOLDER}, processed_at = {_PLACEHOLDER} "
+                f"WHERE command_id = {_PLACEHOLDER}",
+                (status, error_code, error_message, datetime.now(UTC), command_id),
+            )
+        self._maybe_commit()
+
+
 class PostgresStorage:
     """``StoragePort`` を満たす PostgreSQL backend。"""
 
@@ -321,6 +389,9 @@ class PostgresStorage:
         self._audit_events = _AppendOnlyRepository(
             self._conn, "audit_events", AuditEvent, "audit_event_id", tx
         )
+        self._admin_commands = _AdminCommandRepository(
+            self._conn, "admin_commands", AdminCommand, "command_id", tx
+        )
 
     @property
     def source_records(self) -> _UpsertRepository:
@@ -345,6 +416,10 @@ class PostgresStorage:
     @property
     def audit_events(self) -> _AppendOnlyRepository:
         return self._audit_events
+
+    @property
+    def admin_commands(self) -> _AdminCommandRepository:
+        return self._admin_commands
 
     def migrate(self) -> None:
         run_migrations(

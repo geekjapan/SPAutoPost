@@ -17,6 +17,7 @@ from contextlib import AbstractContextManager
 from typing import Protocol, runtime_checkable
 
 from .models import (
+    AdminCommand,
     Advisory,
     AuditEvent,
     DraftPost,
@@ -119,6 +120,29 @@ class AuditEventRepository(Protocol):
 
 
 @runtime_checkable
+class AdminCommandRepository(Protocol):
+    """admin_commands の command queue repository。"""
+
+    def append(self, command: AdminCommand) -> AdminCommand: ...
+
+    def get(self, command_id: str) -> AdminCommand | None: ...
+
+    def claim_pending(self, *, limit: int = DEFAULT_LIST_LIMIT) -> Sequence[AdminCommand]:
+        """pending command を排他的に claim して processing として返す。"""
+        ...
+
+    def complete(self, command_id: str) -> None: ...
+
+    def fail(
+        self,
+        command_id: str,
+        *,
+        error_code: str | None = None,
+        error_message: str | None = None,
+    ) -> None: ...
+
+
+@runtime_checkable
 class StoragePort(Protocol):
     """6 エンティティの repository を束ねるストレージポート。
 
@@ -142,6 +166,9 @@ class StoragePort(Protocol):
 
     @property
     def audit_events(self) -> AuditEventRepository: ...
+
+    @property
+    def admin_commands(self) -> AdminCommandRepository: ...
 
     def migrate(self) -> None:
         """baseline migration を適用する（再実行は no-op）。"""
