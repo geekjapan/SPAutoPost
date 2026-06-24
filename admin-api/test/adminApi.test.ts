@@ -143,6 +143,16 @@ describe("Admin API skeleton", () => {
     assert.equal(store.enqueued.length, 0);
   });
 
+  it("requires an admin principal for command status reads", async () => {
+    const response = await handleAdminApiRequest(store, {
+      method: "GET",
+      path: "/api/commands/command-1",
+      headers: new Map(),
+    });
+
+    assert.equal(response.status, 401);
+  });
+
   it("enqueues approve as AdminCommand and exposes a status URL", async () => {
     const response = await handleAdminApiRequest(store, {
       method: "POST",
@@ -156,7 +166,7 @@ describe("Admin API skeleton", () => {
     assert.equal(store.enqueued[0]?.commandType, "approve");
     assert.equal(store.enqueued[0]?.targetDraftId, "draft-1");
     assert.equal(store.enqueued[0]?.requestedBy, "user-1");
-    assert.match(store.enqueued[0]?.idempotencyKey ?? "", /^admin-api:draft-1:approve:retry-1$/u);
+    assert.match(store.enqueued[0]?.idempotencyKey ?? "", /^admin-api:[a-f0-9]{64}$/u);
     assert.deepEqual((response.body.data as { statusUrl: string }).statusUrl.startsWith("/api/commands/"), true);
   });
 
@@ -175,6 +185,36 @@ describe("Admin API skeleton", () => {
     assert.equal(second.status, 202);
     assert.equal(store.enqueued.length, 1);
     assert.equal((second.body.data as { deduplicated: boolean }).deduplicated, true);
+  });
+
+  it("scopes idempotency keys by principal", async () => {
+    const first = await handleAdminApiRequest(store, {
+      method: "POST",
+      path: "/api/drafts/draft-1/reject",
+      headers: headers({ roles: "reviewer", idempotencyKey: "retry-3" }),
+      body: { comment: "Needs rewrite" },
+    });
+    const second = await handleAdminApiRequest(store, {
+      method: "POST",
+      path: "/api/drafts/draft-1/reject",
+      headers: headers({ user: "user-2", roles: "reviewer", idempotencyKey: "retry-3" }),
+      body: { comment: "Needs rewrite" },
+    });
+
+    assert.equal(first.status, 202);
+    assert.equal(second.status, 202);
+    assert.equal(store.enqueued.length, 2);
+    assert.notEqual(store.enqueued[0]?.idempotencyKey, store.enqueued[1]?.idempotencyKey);
+  });
+
+  it("treats malformed encoded path parameters as not found", async () => {
+    const response = await handleAdminApiRequest(store, {
+      method: "GET",
+      path: "/api/drafts/%E0%A4%A",
+      headers: headers({ roles: "viewer" }),
+    });
+
+    assert.equal(response.status, 404);
   });
 
   it("rejects publish request unless the principal has publisher role", async () => {
@@ -252,9 +292,9 @@ describe("Admin API skeleton", () => {
   });
 });
 
-function headers(input: { roles: string; idempotencyKey?: string }): Map<string, string> {
+function headers(input: { roles: string; idempotencyKey?: string; user?: string }): Map<string, string> {
   const result = new Map<string, string>([
-    ["x-spautopost-user", "user-1"],
+    ["x-spautopost-user", input.user ?? "user-1"],
     ["x-spautopost-roles", input.roles],
   ]);
   if (input.idempotencyKey) {

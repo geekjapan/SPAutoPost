@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import type {
   AdminApiStore,
   AdminCommandType,
@@ -132,7 +132,12 @@ export async function enqueueDraftCommand(
     targetDraftId: input.draftId,
     requestedBy: context.principal.principalId,
     payload: input.payload,
-    idempotencyKey: scopedIdempotencyKey(input.draftId, input.commandType, clientKey),
+    idempotencyKey: scopedIdempotencyKey(
+      context.principal.principalId,
+      input.draftId,
+      input.commandType,
+      clientKey,
+    ),
     correlationId,
     createdAt: new Date().toISOString(),
   };
@@ -241,11 +246,15 @@ function requireIdempotencyKey(headers: ReadonlyMap<string, string>): string {
 }
 
 function scopedIdempotencyKey(
+  principalId: string,
   draftId: string,
   commandType: AdminCommandType,
   clientKey: string,
 ): string {
-  return `admin-api:${draftId}:${commandType}:${clientKey}`;
+  const digest = createHash("sha256")
+    .update(JSON.stringify([principalId, draftId, commandType, clientKey]))
+    .digest("hex");
+  return `admin-api:${digest}`;
 }
 
 function parseRoles(raw: string | undefined): readonly AdminRole[] {

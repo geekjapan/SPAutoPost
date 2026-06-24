@@ -18,6 +18,9 @@ export class PostgresAdminApiStore implements AdminApiStore {
 
   constructor(databaseUrl: string) {
     this.pool = new Pool({ connectionString: databaseUrl });
+    this.pool.on("error", (error) => {
+      process.stderr.write(`Postgres pool idle client error: ${error.message}\n`);
+    });
   }
 
   async listDrafts(params: { readonly limit: number; readonly offset: number }): Promise<readonly DraftPostSummary[]> {

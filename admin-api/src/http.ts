@@ -139,26 +139,37 @@ function numberFromQuery(query: ReadonlyMap<string, string> | undefined, key: st
 
 function matchCommandPath(path: string): { readonly commandId: string } | undefined {
   const match = /^\/api\/commands\/([^/]+)$/u.exec(path);
-  return match?.[1] ? { commandId: decodeURIComponent(match[1]) } : undefined;
+  const commandId = match?.[1] ? safeDecodeURIComponent(match[1]) : undefined;
+  return commandId ? { commandId } : undefined;
 }
 
 function matchDraftPath(path: string): { readonly draftId: string } | undefined {
   const match = /^\/api\/drafts\/([^/]+)$/u.exec(path);
-  return match?.[1] ? { draftId: decodeURIComponent(match[1]) } : undefined;
+  const draftId = match?.[1] ? safeDecodeURIComponent(match[1]) : undefined;
+  return draftId ? { draftId } : undefined;
 }
 
 function matchDraftAuditPath(path: string): { readonly draftId: string } | undefined {
   const match = /^\/api\/drafts\/([^/]+)\/audit-events$/u.exec(path);
-  return match?.[1] ? { draftId: decodeURIComponent(match[1]) } : undefined;
+  const draftId = match?.[1] ? safeDecodeURIComponent(match[1]) : undefined;
+  return draftId ? { draftId } : undefined;
 }
 
 function matchDraftActionPath(
   path: string,
 ): { readonly draftId: string; readonly action: string } | undefined {
   const match = /^\/api\/drafts\/([^/]+)\/(approve|reject|regenerate|publish-request)$/u.exec(path);
-  return match?.[1] && match[2]
-    ? { draftId: decodeURIComponent(match[1]), action: decodeURIComponent(match[2]) }
-    : undefined;
+  const draftId = match?.[1] ? safeDecodeURIComponent(match[1]) : undefined;
+  const action = match?.[2] ? safeDecodeURIComponent(match[2]) : undefined;
+  return draftId && action ? { draftId, action } : undefined;
+}
+
+function safeDecodeURIComponent(value: string): string | undefined {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return undefined;
+  }
 }
 
 function commandTypeFromRoute(routeValue: string): AdminCommandType {
