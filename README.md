@@ -89,6 +89,21 @@ spautopost --dry-run import-advisory samples/advisories/manual-cve.yaml
 spautopost --dry-run import-advisory samples/advisories/manual-advisory.json
 ```
 
+### dry-run preview と監査ログ
+
+手動 advisory から原稿を生成し、SharePoint へ送る予定の payload（Site Page 必須セクション）と
+最小監査イベントを実投稿せずに確認できます。`test_mock` provider で生成し、外部 API 呼び出し、
+SharePoint 投稿、Secret 解決、永続化は行いません。投稿先識別子（`env:` 参照）と Secret は
+`***` に秘匿します。
+
+```sh
+spautopost preview-draft samples/advisories/manual-cve.yaml
+```
+
+出力には投稿予定 payload と、provider 名 / provider type / prompt version /
+generation_input_hash / operation / result を含む監査イベント（`publish_dry_run`）が含まれます。
+生成が失敗した場合は error_code / error_message を持つ `error` イベントを表示します。
+
 ## ストレージとマイグレーション
 
 ストレージは ORM 非依存の repository ポート（`StoragePort`）越しに使用します。

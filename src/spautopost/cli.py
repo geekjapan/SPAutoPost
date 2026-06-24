@@ -10,9 +10,10 @@ import argparse
 import json
 import os
 import sys
+import uuid
 from collections.abc import Sequence
 from dataclasses import asdict
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -21,8 +22,23 @@ import yaml
 from . import __version__
 from .advisory_input import AdvisoryInputError, ManualAdvisoryInput, load_manual_advisory
 from .config import Config, load_and_validate
+from .dry_run import (
+    GENERATION_FAILED,
+    audit_event_to_dict,
+    build_error_audit_event,
+    build_preview_audit_event,
+    build_site_page_payload,
+)
 from .errors import ConfigValidationError
+from .llm import DraftInput, MockLLMProvider, TargetAudience, Urgency
 from .secrets import redact_config
+
+# dry-run preview の固定方針（draft-composition.md: MVP は mixed / 日本語標準）。
+PREVIEW_AUDIENCE: TargetAudience = "mixed"
+PREVIEW_LANGUAGE = "ja"
+PREVIEW_TEMPLATE_ID = "site-page-v1"
+DEFAULT_PROMPT_VERSION = "v1"
+DEFAULT_URGENCY: Urgency = "normal"
 
 DEFAULT_CONFIG_DIR = Path("config")
 DEFAULT_ENV = "development"
@@ -77,6 +93,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="YAML / JSON の手動 advisory を検証し normalized preview を表示する",
     )
     import_advisory.add_argument("input_file", type=Path, help="manual advisory YAML / JSON file")
+    preview_draft = sub.add_parser(
+        "preview-draft",
+        help="手動 advisory から原稿を生成し、投稿予定 payload と監査イベントを dry-run 表示する",
+    )
+    preview_draft.add_argument("input_file", type=Path, help="manual advisory YAML / JSON file")
     return parser
 
 
@@ -116,6 +137,8 @@ def _dispatch(args: argparse.Namespace, config: Config, dry_run: bool) -> int:
         return _run_migrate(config, dry_run)
     if command == "import-advisory":
         return _run_import_advisory(args.input_file, dry_run)
+    if command == "preview-draft":
+        return _run_preview_draft(args.input_file, config)
     print(f"unknown command: {command}", file=sys.stderr)  # pragma: no cover
     return EXIT_RUNTIME_ERROR  # pragma: no cover
 
@@ -155,6 +178,90 @@ def _json_ready(value: Any) -> Any:
     if isinstance(value, (list, tuple)):
         return [_json_ready(item) for item in value]
     return value
+
+
+def _run_preview_draft(input_file: Path, config: Config) -> int:
+    """手動 advisory から原稿を生成し、投稿予定 payload と監査イベントを dry-run 表示する。
+
+    実投稿・外部 API 呼び出し・Secret 解決・永続化は行わない。投稿先識別子は ``env:``
+    参照のまま扱い、出力直前に redaction する。
+    """
+    try:
+        loaded = load_manual_advisory(input_file)
+    except FileNotFoundError:
+        print(f"advisory input not found: {input_file}", file=sys.stderr)
+        return EXIT_RUNTIME_ERROR
+    except OSError as exc:
+        print(f"advisory input read failed: {exc}", file=sys.stderr)
+        return EXIT_RUNTIME_ERROR
+    except AdvisoryInputError as exc:
+        print("advisory input validation failed:", file=sys.stderr)
+        for issue in exc.issues:
+            print(f"  - {issue}", file=sys.stderr)
+        return EXIT_INPUT_INVALID
+
+    provider = MockLLMProvider(prompt_version=config.llm.prompt_version or DEFAULT_PROMPT_VERSION)
+    metadata = provider.get_provider_metadata()
+    advisory = loaded.advisory
+    urgency = loaded.urgency or DEFAULT_URGENCY
+    correlation_id = uuid.uuid4().hex
+    now = datetime.now(UTC)
+
+    draft_input = DraftInput(
+        advisory=_json_ready(asdict(advisory)),
+        target_audience=PREVIEW_AUDIENCE,
+        target_language=PREVIEW_LANGUAGE,
+        urgency=urgency,
+        template_id=PREVIEW_TEMPLATE_ID,
+        prompt_version=config.llm.prompt_version or DEFAULT_PROMPT_VERSION,
+        references=[dict(ref) for ref in advisory.references],
+    )
+
+    try:
+        draft = provider.generate_draft(draft_input)
+    except Exception as exc:  # noqa: BLE001 - 失敗は error 監査イベントとして追跡する
+        error_event = build_error_audit_event(
+            correlation_id=correlation_id,
+            audit_event_id=uuid.uuid4().hex,
+            now=now,
+            error_code=GENERATION_FAILED,
+            error_message=str(exc),
+            provider=metadata,
+        )
+        _print_preview({"dry_run": True, "audit_event": audit_event_to_dict(error_event)})
+        return EXIT_RUNTIME_ERROR
+
+    payload = build_site_page_payload(
+        draft,
+        urgency=urgency,
+        target_site_id=config.sharepoint.site_id,
+        target_page_library_id=config.sharepoint.page_library_id,
+        mode=config.sharepoint.mode,
+    )
+    audit_event = build_preview_audit_event(
+        provider=metadata,
+        draft=draft,
+        correlation_id=correlation_id,
+        audit_event_id=uuid.uuid4().hex,
+        now=now,
+        advisory_id=advisory.advisory_id,
+        target_site_id=config.sharepoint.site_id,
+        target_page_library_id=config.sharepoint.page_library_id,
+    )
+    _print_preview(
+        {
+            "dry_run": True,
+            "payload": payload,
+            "audit_event": audit_event_to_dict(audit_event),
+        }
+    )
+    return EXIT_OK
+
+
+def _print_preview(preview: dict[str, Any]) -> None:
+    """preview を Secret / ``env:`` 参照を redaction して JSON 出力する。"""
+    redacted = redact_config(preview)
+    print(json.dumps(redacted, ensure_ascii=False, indent=2))
 
 
 def _run_migrate(config: Config, dry_run: bool) -> int:
