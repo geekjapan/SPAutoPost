@@ -15,6 +15,7 @@ WORKDIR /app
 # Install the package with the postgres extra (hosted uses Azure PostgreSQL).
 COPY pyproject.toml README.md ./
 COPY src ./src
+COPY db ./db
 RUN python -m pip install --upgrade pip \
     && python -m pip install ".[postgres]"
 

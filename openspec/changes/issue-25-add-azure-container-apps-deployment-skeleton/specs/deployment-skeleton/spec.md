@@ -1,7 +1,7 @@
 ## ADDED Requirements
 
 ### Requirement: Container image build premise for the Python core
-The system SHALL provide a container image build definition for the Python core that installs the package and uses the SPAutoPost CLI as the container entrypoint, so Azure Container Apps Jobs can invoke CLI commands.
+The system SHALL provide a container image build definition for the Python core that installs the package, includes baseline migration SQL, and uses the SPAutoPost CLI as the container entrypoint, so Azure Container Apps Jobs can invoke CLI commands.
 
 #### Scenario: Core image runs a CLI command
 - **WHEN** the core image is built and started with a job name argument
@@ -38,6 +38,10 @@ The system SHALL provide separate local and hosted configuration examples, where
 #### Scenario: Hosted config example uses env references for secrets
 - **WHEN** the hosted configuration example is inspected
 - **THEN** every secret (database URL, tenant, SharePoint target identifiers) is expressed as an `env:` reference and no literal secret value is present
+
+#### Scenario: Hosted database URL is resolved at runtime
+- **WHEN** the hosted configuration contains `storage.database_url: env:SPAUTOPOST_DATABASE_URL`
+- **THEN** storage construction resolves the environment variable before connecting and does not pass the literal `env:` reference to PostgreSQL
 
 ### Requirement: Hosted run is documented
 The system SHALL document the difference between local execution and Azure-intended hosted execution, including required environment variables and secret references.

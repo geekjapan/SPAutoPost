@@ -4,7 +4,7 @@
 
 ## 2. Container build premise
 
-- [x] 2.1 Add `deploy/Dockerfile.core` (Python core image) with CLI job entrypoint
+- [x] 2.1 Add `deploy/Dockerfile.core` (Python core image) with CLI job entrypoint and migration SQL
 - [x] 2.2 Add `deploy/Dockerfile.admin` and `.dockerignore` for the Admin API skeleton
 
 ## 3. Job entrypoint and command skeletons
@@ -17,6 +17,7 @@
 
 - [x] 4.1 Add `deploy/config.hosted.example.yml` (production / postgresql / env refs)
 - [x] 4.2 Add `deploy/hosted.env.example` env / secret reference examples (no real values)
+- [x] 4.3 Resolve hosted `env:` database URL before constructing PostgreSQL storage
 
 ## 5. Docs
 

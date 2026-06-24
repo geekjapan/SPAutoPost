@@ -14,10 +14,12 @@
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 from ..config import StorageConfig
+from ..secrets import is_secret_ref, secret_env_name
 from .errors import StorageConfigError, UnknownProviderError
 from .migrate import DEFAULT_MIGRATIONS_ROOT
 
@@ -61,4 +63,20 @@ def _build_postgres(config: StorageConfig, migrations_root: Path) -> StoragePort
     # psycopg は postgresql 分岐でのみ遅延 import する (sqlite 経路は不要)。
     from .postgres_backend import build_postgres_storage
 
-    return build_postgres_storage(config.database_url, migrations_root=migrations_root)
+    return build_postgres_storage(
+        _resolve_database_url(config.database_url),
+        migrations_root=migrations_root,
+    )
+
+
+def _resolve_database_url(database_url: str) -> str:
+    """Resolve ``env:NAME`` database URL references at the storage boundary."""
+    if not is_secret_ref(database_url):
+        return database_url
+    name = secret_env_name(database_url)
+    resolved = os.environ.get(name)
+    if not resolved:
+        raise StorageConfigError(
+            f"missing required secret env var: {name} (referenced at storage.database_url)"
+        )
+    return resolved

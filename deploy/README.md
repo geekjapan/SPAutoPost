@@ -10,7 +10,7 @@ Admin UI は M1 非対象（`docs/specs/deployment.md` の Non-Goals）。
 
 | ファイル | 役割 |
 |----------|------|
-| `Dockerfile.core` | Python core image。`spautopost-job` を ENTRYPOINT にする |
+| `Dockerfile.core` | Python core image。`spautopost-job` を ENTRYPOINT にし、baseline migration SQL を含める |
 | `Dockerfile.admin` | Admin API（TypeScript skeleton, Issue #31）の image |
 | `jobs.example.yaml` | Container Apps Jobs の command / schedule / secretRef 参照 skeleton |
 | `config.hosted.example.yml` | hosted 設定例（production / postgresql / `env:` 参照） |
