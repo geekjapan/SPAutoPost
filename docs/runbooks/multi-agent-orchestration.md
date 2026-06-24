@@ -24,8 +24,9 @@ Draft
 ```text
 GitHub Milestone
   └─ GitHub Issue                  ← 正本
-       └─ Orca worktree            ← Issue から worktree 作成（orca.yaml issueCommand 起動）
-            └─ agent (Claude Code / Codex)
+       └─ Orca Orchestrator task DAG
+            └─ Orca worktree       ← Issue から worktree 作成（orca.yaml issueCommand 起動）
+                 └─ worker pool (Claude Code Bypass/Yolo / Codex yolo / 必要に応じ OpenCode / Pi)
                  └─ OpenSpec change        ← opsx:propose（change ID = issue-<n>-<kebab>）
                       └─ 事前ゲート          ← self-grill-across-multi-propose
                            └─ 実装 + 検証     ← tdd / code-review / security-review
@@ -33,16 +34,63 @@ GitHub Milestone
                                      └─ auto-merge ゲート（carve-out 該当時は人間）
 ```
 
+Orca 起動後は、Issue queue を順次消化する常駐コックピットとして運用する。人間が都度 Issue を選ぶのではなく、Orchestrator が Issue の分類、worktree wave、worker dispatch、PR review 対応、merge gate、archive、次 Issue 選定までを回す。
+
+### Dynamic Workflow
+
+Orchestrator の task DAG は次を標準形とする。
+
+```text
+parent: issue-<n> lifecycle
+  -> classify / source-of-truth check
+  -> OpenSpec change
+  -> implementation
+  -> verification
+  -> diff review
+  -> commit / PR create
+  -> PR review fix
+  -> CI / review recheck
+  -> merge gate
+  -> archive worktree
+  -> next issue selection
+```
+
+- 各 worker は dispatch ごとに `worker_done` を 1 回だけ返す。`worker_done` は coordinator への完了通知、`decision_gate` は続行判断待ち、`escalation` は人間または coordinator 介入要求を表す。
+- ブロック時は `decision_gate` / `escalation` を使い、ローカル TUI の質問で停止しない。
+- 長時間 task は heartbeat を返す。coordinator は timeout を失敗扱いせず、terminal activity / task state / inbox を確認して継続判断する。
+- PR review fix、CI failure fix、security review は同じ Issue lifecycle の子 task として扱い、完了後に merge gate へ戻す。
+- workflow の正本は GitHub Issue / Milestone / Spec であり、Orchestrator task や worker prompt は実行管理メモにすぎない。
+
 ## 1. Orca worktree 運用
 
 - **1 Issue = 1 worktree = 1 OpenSpec change** を基本単位とする。
 - worktree 作成時に `orca.yaml` の `setup` が走り、`git fetch`・openspec 確認・agmsg 案内を行う。
 - Issue 紐付き起動では `issueCommand` が仕様駆動ループの開始手順を提示する。
-- **fan-out / merge-winner**: 設計難度が高い、または方式が割れる change では、同一 Issue を複数エージェント（例: Claude Code と Codex）に並列で当て、diff を比較して優位案をマージする。採否理由は PR または Issue に残す。
+- **parallel Issue wave**: 依存関係がない Issue は複数 worktree で同時に進めてよい。
+- **fan-out / merge-winner**: 設計難度が高い、または方式が割れる change では、同一 Issue を複数エージェント（例: Claude Code Bypass/Yolo と Codex yolo）に並列で当て、diff を比較して優位案をマージする。採否理由は PR または Issue に残す。
+- **review-fix worker**: PR review 対応や CI 失敗修正は、原則として既存 Issue worktree に fresh terminal を追加して行う。実装 worker と別 runtime にレビューさせるときは、編集範囲を明示する。
+- **shared-file serialization**: `AGENTS.md`、`docs/specs/`、data model、config、migration など共有ファイルに触る task は agmsg / Orchestrator で衝突予告し、必要なら順序化する。
 - ブランチ命名は `AGENTS.md` に従う: `change|fix|docs/<issue-number>-<short-kebab-title>`。
 - worktree 撤去時は `archive` が未マージ change / PR / agmsg 未読の確認を促す。
 
-## 2. agmsg 協調プレイブック
+## 2. Worker pool / runtime 運用
+
+Codex に固定せず、Orca 上の multi-runtime worker pool として扱う。
+
+| Runtime | 主な用途 | 起動前提 |
+|---------|----------|----------|
+| Codex | 実装、テスト、OpenSpec、CI / review fix | yolo |
+| Claude Code | 設計レビュー、実装代替案、diff review、複雑 Issue の fan-out | Bypass/Yolo |
+| OpenCode / Pi | 必要時の補助 worker | `AGENTS.md` 継承 |
+
+- Orchestrator が coordinator であり、worker runtime は実行手段にすぎない。
+- Orca 内で起動する実装 worker は、承認待ちで停止しない yolo/bypass 前提で起動する。
+- Orchestrator は Secret、認証情報、実 publish、外部アカウント操作を必要とする task を yolo/bypass worker に直接 dispatch しない。必要な場合は人間 gate 付き task として分離し、worker には最小権限の環境変数・設定だけを渡す。
+- hooks は事前確認済みのものだけを承認済みとして扱う。Secret や外部 publish につながる hook / tool は carve-out として人間 gate に回す。
+- 同一 Issue の fan-out では、各 candidate worktree の採否理由、落とした案、採用差分を PR または Issue に残す。
+- PR 前 review は、実装 worker とは別 runtime に投げることを推奨する。狭い修正なら同じ runtime の fresh terminal でもよい。
+
+## 3. agmsg 協調プレイブック
 
 - チームは `spautopost`。各 worktree のエージェントは固有名で参加する（例: `claude-m1-scheduler`, `codex-m1-connector`）。
 - **メッセージを送る場面**:
@@ -52,7 +100,7 @@ GitHub Milestone
 - **受信**: Claude Code は monitor モード（リアルタイム）、Codex は Stop フック（`.codex/hooks.json`）で受信する。
 - 重要な合意・決定はチャットに留めず、Issue / Spec / `docs/decisions/` に反映する（チャットは正本ではない）。
 
-## 3. ECC スキル / エージェント起動マップ
+## 4. ECC スキル / エージェント起動マップ
 
 | フェーズ | Claude Code | Codex |
 |----------|-------------|-------|
@@ -68,7 +116,7 @@ GitHub Milestone
 - ルール（規約・チェックリスト）は `.claude/rules/ecc/`（common + python + typescript + web）。
 - `paths:` グロブにより、`**/*.py` 等の実コードに自動適用される。
 
-## 4. 自律度と人間ゲート
+## 5. 自律度と人間ゲート
 
 既定の自律度は **高（merge まで自動）**: CI がグリーンで、かつ下記 carve-out に該当しない change は PR 作成から merge まで自動で進めてよい。投稿（publish）は常に人間承認（`docs/runbooks/operation.md`）。
 
@@ -81,19 +129,19 @@ GitHub Milestone
 - セキュリティ / 法務上の判断が必要。
 - **必須チェック未設定の間**: CI ワークフロー（`.github/workflows/ci.yml`: ruff / mypy / pytest+coverage / gitleaks）は整備済み。auto-merge を実効化するには branch protection で必須ステータスチェックを設定する。それまでは「PR 作成 → 人間 merge」にフォールバックする。
 
-## 5. 失敗対応
+## 6. 失敗対応
 
 - **エージェント停止 / 競合**: Orca で該当 worktree を確認し、`git status` と OpenSpec change の整合を確認。復旧不能なら worktree を破棄し Issue から再作成。
 - **並列マージ衝突**: 共有ファイルは agmsg で予告 → 順序化。衝突発生時は最新 main に rebase し、change の整合を再確認。
 - **CI 失敗**: `ecc:build-fix` / 各言語 build-resolver で最小修正。原因が仕様起因なら carve-out としてエスカレーション。
 - **誤投稿**: `docs/runbooks/incident-response.md` と `operation.md`「Correction Procedure」に従う。
 
-## 6. 停止手順
+## 7. 停止手順
 
 - 全エージェント停止が必要な場合: Orca で全 worktree のエージェントを停止し、未マージ PR を確認。
 - 投稿系の緊急停止は `operation.md`「Stop Procedure」に従う（scheduler 停止・publish 無効化）。
 
-## 7. 関連ドキュメント
+## 8. 関連ドキュメント
 
 - `AGENTS.md`（実装エージェント向け単一正本）
 - `docs/openspec-workflow.md`（Issue → OpenSpec change 手順）
