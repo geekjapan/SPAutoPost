@@ -130,54 +130,56 @@ def run_sample_source_job(
     prompt_version = metadata.prompt_version or SAMPLE_DEFAULT_PROMPT_VERSION
     results: list[SampleSourceJobResult] = []
 
-    with storage.transaction():
-        for candidate in fetch_sample_source_candidates():
-            source_record, advisory = advisory_from_sample_candidate(candidate, now=timestamp)
-            draft_output = provider.generate_draft(
-                DraftInput(
-                    advisory=_json_ready(asdict(advisory)),
-                    target_audience=SAMPLE_TARGET_AUDIENCE,
-                    target_language=SAMPLE_TARGET_LANGUAGE,
-                    urgency=SAMPLE_URGENCY,
-                    template_id=SAMPLE_TEMPLATE_ID,
-                    prompt_version=prompt_version,
-                    references=[dict(ref) for ref in advisory.references],
-                )
-            )
-            draft = DraftPost(
-                draft_id=f"draft-{advisory.advisory_id}",
-                title=draft_output.title,
-                audience=SAMPLE_TARGET_AUDIENCE,
+    for candidate in fetch_sample_source_candidates():
+        source_record, advisory = advisory_from_sample_candidate(candidate, now=timestamp)
+        draft_output = provider.generate_draft(
+            DraftInput(
+                advisory=_json_ready(asdict(advisory)),
+                target_audience=SAMPLE_TARGET_AUDIENCE,
+                target_language=SAMPLE_TARGET_LANGUAGE,
                 urgency=SAMPLE_URGENCY,
-                summary_for_users=draft_output.summary_for_users,
-                impact=draft_output.impact,
-                status="generated",
-                created_at=timestamp,
-                updated_at=timestamp,
-                advisory_id=advisory.advisory_id,
-                advisory_ids=(advisory.advisory_id,),
-                required_actions=tuple(draft_output.required_actions),
-                admin_actions=tuple(draft_output.admin_actions),
-                references=tuple(draft_output.references),
-                generated_by_provider=metadata.provider_name,
+                template_id=SAMPLE_TEMPLATE_ID,
                 prompt_version=prompt_version,
-                generation_input_hash=draft_output.generation_input_hash,
-                validation_warnings=(
-                    *draft_output.warnings,
-                    *draft_output.uncertainty_notes,
-                    *draft_output.validation_hints,
-                ),
+                references=[dict(ref) for ref in advisory.references],
             )
-            storage.source_records.upsert(source_record)
-            storage.advisories.upsert(advisory)
-            storage.draft_posts.upsert(draft)
-            results.append(
-                SampleSourceJobResult(
-                    source_record=source_record,
-                    advisory=advisory,
-                    draft_post=draft,
-                )
+        )
+        draft = DraftPost(
+            draft_id=f"draft-{advisory.advisory_id}",
+            title=draft_output.title,
+            audience=SAMPLE_TARGET_AUDIENCE,
+            urgency=SAMPLE_URGENCY,
+            summary_for_users=draft_output.summary_for_users,
+            impact=draft_output.impact,
+            status="generated",
+            created_at=timestamp,
+            updated_at=timestamp,
+            advisory_id=advisory.advisory_id,
+            advisory_ids=(advisory.advisory_id,),
+            required_actions=tuple(draft_output.required_actions),
+            admin_actions=tuple(draft_output.admin_actions),
+            references=tuple(draft_output.references),
+            generated_by_provider=metadata.provider_name,
+            prompt_version=prompt_version,
+            generation_input_hash=draft_output.generation_input_hash,
+            validation_warnings=(
+                *draft_output.warnings,
+                *draft_output.uncertainty_notes,
+                *draft_output.validation_hints,
+            ),
+        )
+        results.append(
+            SampleSourceJobResult(
+                source_record=source_record,
+                advisory=advisory,
+                draft_post=draft,
             )
+        )
+
+    with storage.transaction():
+        for result in results:
+            storage.source_records.upsert(result.source_record)
+            storage.advisories.upsert(result.advisory)
+            storage.draft_posts.upsert(result.draft_post)
     return tuple(results)
 
 
