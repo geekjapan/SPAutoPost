@@ -17,7 +17,7 @@
 ## Risks / Trade-offs
 
 - **二層正本の同期コスト**: data-model.md と capability requirement がズレる懸念。→ requirement はフィールド表を列挙せず「必須項目を持つこと」「追跡できること」を制約として書き、詳細は normative reference に委譲して同期点を最小化する。
-- **storage baseline との縮退差**: data-model.md は `source_refs: SourceRef[]` を必須とするが storage baseline は単一 FK へ意図的に縮退済み（Issue #28 reconcile note）。本 change は概念モデルの正本性のみ扱い、縮退の是非には踏み込まない（既存ノートを尊重）。
+- **storage baseline との縮退差**: data-model.md は `source_refs: SourceRef[]` を必須とするが storage baseline は単一 FK へ意図的に縮退済み（Issue #28 reconcile note）。単一 FK 実装は概念上「要素数 1 の `source_refs`」へ写像できる場合に限り、この capability へ適合する。複数情報源や per-source confidence が必要になった時点で、data-model.md の reconcile note 通り JSONB または junction table へ拡張する。本 change は物理スキーマを変更しない。
 
 ## Migration Plan
 

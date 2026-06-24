@@ -2,7 +2,7 @@
 
 ### Requirement: 正規化済みコアエンティティと必須項目
 
-システムは正規化済みコアデータモデルとして `SourceRecord` / `Advisory` / `DraftPost` / `ReviewEvent` / `Publication` / `AuditEvent` の各エンティティを定義しなければならない（SHALL）。各エンティティの必須項目は `docs/specs/data-model.md`（normative reference）に従い、最低限 `Advisory` は `advisory_id` / `title` / `summary` / `source_refs` / `references` / `created_at` / `normalized_at` を、`DraftPost` は `draft_id` / `advisory_ids` / `title` / `audience` / `urgency` / `summary_for_users` / `impact` / `required_actions` / `status` を、`Publication` は `publication_id` / `draft_id` / `target_type` / `target_site_id` / `publication_status` / `idempotency_key` を、`AuditEvent` は `audit_event_id` / `event_type` / `correlation_id` / `result` を必須として持たなければならない（SHALL）。各エンティティは外部 ID とは独立した内部 ID 文字列を持たなければならない（SHALL）。
+システムは正規化済みコアデータモデルとして `SourceRecord` / `Advisory` / `DraftPost` / `ReviewEvent` / `Publication` / `AuditEvent` の各エンティティを定義しなければならない（SHALL）。各エンティティの必須項目は `docs/specs/data-model.md`（normative reference）に従い、最低限 `Advisory` は `advisory_id` / `title` / `summary` / `source_refs` / `references` / `created_at` / `normalized_at` を、`DraftPost` は `draft_id` / `advisory_ids` / `title` / `audience` / `urgency` / `summary_for_users` / `impact` / `required_actions` / `status` を、`Publication` は `publication_id` / `draft_id` / `target_type` / `target_site_id` / `publication_status` / `idempotency_key` を、`AuditEvent` は `audit_event_id` / `event_type` / `correlation_id` / `result` / `created_at` を必須として持たなければならない（SHALL）。各エンティティは外部 ID とは独立した内部 ID 文字列を持たなければならない（SHALL）。
 
 #### Scenario: 4 つのコアエンティティが定義されている
 - **WHEN** データモデル定義を検査する
@@ -14,7 +14,7 @@
 
 ### Requirement: 出典から投稿結果までのトレーサビリティ
 
-システムは出典（source）→ AI 生成（draft generation）→ レビュー（review）→ 投稿結果（publication result）の連鎖を ID 参照で追跡可能にしなければならない（SHALL）。`Advisory.source_refs` は各情報源を `source_record_id` で参照し、`DraftPost.advisory_ids` は元の `Advisory` を、`ReviewEvent.draft_id` と `Publication.draft_id` は対象 `DraftPost` を、`AuditEvent.related_ids` は関連エンティティを参照しなければならない（SHALL）。任意の `Publication` から逆方向に `DraftPost` → `Advisory` → `SourceRecord` まで辿れなければならない（SHALL）。
+システムは出典（source）→ AI 生成（draft generation）→ レビュー（review）→ 投稿結果（publication result）の連鎖を ID 参照で追跡可能にしなければならない（SHALL）。`Advisory.source_refs` は各情報源を `source_record_id` で参照し、`DraftPost.advisory_ids` は元の `Advisory` を、`ReviewEvent.draft_id` と `Publication.draft_id` は対象 `DraftPost` を、`AuditEvent.related_ids` は関連エンティティ（識別可能な型プレフィックス付き ID、またはエンティティ型と ID のペア）を参照しなければならない（SHALL）。任意の `Publication` から逆方向に `DraftPost` → `Advisory` → `SourceRecord` まで辿れなければならない（SHALL）。
 
 #### Scenario: 投稿結果から出典まで遡及できる
 - **WHEN** ある `Publication` を起点に参照をたどる
@@ -46,14 +46,14 @@
 
 ### Requirement: external collector 分離後も使える input model
 
-システムは将来 crawler / collector を分離した場合でも、正規化済み advisory を import して同一の `Advisory` モデルへ変換できる input model を維持しなければならない（SHALL）。import schema は最低限 `schema_version` / `producer` / `generated_at` と advisory 配列を含み、各 advisory は `title` / `summary` / `references` と enum 制約済みフィールドを持たなければならない（SHALL、詳細は `docs/specs/external-collector-boundary.md` を normative reference とする）。import は `producer` / external advisory_id / `cve_ids` / `jvn_ids` / source URL / raw hash により重複を識別できなければならない（SHALL）。
+システムは将来 crawler / collector を分離した場合でも、正規化済み advisory を import して同一の `Advisory` モデルへ変換できる input model を維持しなければならない（SHALL）。import schema は最低限 `schema_version` / `producer` / `generated_at` と advisory 配列を含み、各 advisory は `title` / `summary` / `references` と enum 制約済みフィールドを持たなければならない（SHALL、詳細は `docs/specs/external-collector-boundary.md` を normative reference とする）。import は `producer` と `external_advisory_id` の組み合わせ、または `source_url` や `raw_hash` により一意に重複を識別できなければならない（SHALL）。`cve_ids` / `jvn_ids` は関連付けと検索のための属性であり、それだけを dedupe 主キーとして扱ってはならない（SHALL NOT）。
 
 #### Scenario: 正規化済み import が Advisory に変換される
 - **WHEN** external collector が `schema_version` 付きの正規化済み advisory を file import する
 - **THEN** 各レコードは内部 `Advisory` モデル（`source_refs` 付き）へ変換でき、ランタイムの後続処理（draft composition 以降）が collector の有無に依存しない
 
 #### Scenario: import の重複を識別できる
-- **WHEN** 同一 producer から同一 external advisory_id / cve_ids を再 import する
+- **WHEN** 同一 producer から同一 external_advisory_id を持つレコードを再 import する
 - **THEN** 重複として識別できる
 
 ### Requirement: データモデルに Secret を保存しない
