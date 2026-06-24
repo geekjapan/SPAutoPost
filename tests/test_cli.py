@@ -180,3 +180,19 @@ def test_import_advisory_invalid_input_returns_three(
     assert "advisory input validation failed" in err
     assert "summary is required" in err
     assert "references is required" in err
+
+
+def test_import_advisory_read_error_returns_one(
+    config_dir: Path,
+    valid_environ: dict[str, str],
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    _set_env(monkeypatch, valid_environ)
+
+    code = main(["--config-dir", str(config_dir), "--dry-run", "import-advisory", str(tmp_path)])
+
+    assert code == 1
+    err = capsys.readouterr().err
+    assert "advisory input read failed" in err

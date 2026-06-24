@@ -155,9 +155,12 @@ def _text_list(data: Mapping[str, object], key: str, issues: list[str]) -> tuple
 
 
 def _references(data: Mapping[str, object], issues: list[str]) -> tuple[Mapping[str, str], ...]:
-    value = data.get("references")
-    if not _is_sequence(value):
+    if "references" not in data or data["references"] is None:
         issues.append("references is required")
+        return ()
+    value = data["references"]
+    if not _is_sequence(value):
+        issues.append("references must be a list of reference objects")
         return ()
     if not value:
         issues.append("references must not be empty")
@@ -178,7 +181,14 @@ def _references(data: Mapping[str, object], issues: list[str]) -> tuple[Mapping[
             issues.append(f"references[{index}].url must be an http(s) URL")
         if not isinstance(ref_type, str) or ref_type not in _REFERENCE_TYPES:
             issues.append(f"references[{index}].type is invalid")
-        if isinstance(label, str) and isinstance(url, str) and isinstance(ref_type, str):
+        if (
+            isinstance(label, str)
+            and label.strip()
+            and isinstance(url, str)
+            and _valid_url(url)
+            and isinstance(ref_type, str)
+            and ref_type in _REFERENCE_TYPES
+        ):
             references.append({"label": label.strip(), "url": url.strip(), "type": ref_type})
     return tuple(references)
 
@@ -205,6 +215,11 @@ def _datetime_field(data: Mapping[str, object], key: str, issues: list[str]) -> 
     if key not in data or data[key] is None:
         return None
     value = data[key]
+    if isinstance(value, datetime):
+        if value.tzinfo is None or value.utcoffset() is None:
+            issues.append(f"{key} must include timezone")
+            return None
+        return value.astimezone(UTC)
     if not isinstance(value, str):
         issues.append(f"{key} must be an ISO-8601 datetime string")
         return None
@@ -238,4 +253,4 @@ def _utc_now(now: datetime | None) -> datetime:
 
 
 def _is_sequence(value: object) -> TypeGuard[Sequence[object]]:
-    return isinstance(value, Sequence) and not isinstance(value, str | bytes)
+    return isinstance(value, Sequence) and not isinstance(value, (str, bytes))

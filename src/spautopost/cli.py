@@ -126,6 +126,9 @@ def _run_import_advisory(input_file: Path, dry_run: bool) -> int:
     except FileNotFoundError:
         print(f"advisory input not found: {input_file}", file=sys.stderr)
         return EXIT_RUNTIME_ERROR
+    except OSError as exc:
+        print(f"advisory input read failed: {exc}", file=sys.stderr)
+        return EXIT_RUNTIME_ERROR
     except AdvisoryInputError as exc:
         print("advisory input validation failed:", file=sys.stderr)
         for issue in exc.issues:
@@ -149,7 +152,7 @@ def _json_ready(value: Any) -> Any:
         return value.isoformat()
     if isinstance(value, dict):
         return {key: _json_ready(item) for key, item in value.items()}
-    if isinstance(value, list | tuple):
+    if isinstance(value, (list, tuple)):
         return [_json_ready(item) for item in value]
     return value
 
