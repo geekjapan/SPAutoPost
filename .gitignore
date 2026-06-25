@@ -16,3 +16,4 @@ venv/
 # Env / secrets
 .env
 .env.*
+.worktrees/
