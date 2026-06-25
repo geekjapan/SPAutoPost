@@ -288,7 +288,10 @@ MVP 実装前または M1 途中で決める必要がある未決事項:
 - Azure hosted runtime の Graph 認証方式を delegated / application / managed identity のどれにするか
 - Azure OpenAI / Foundry provider を M1 に含めるか、M3 まで待つか
 - Container Apps の app / job 分割をどこまで M1 に含めるか
-- Admin UI/API と Python core の呼び出し境界を process / HTTP / shared DB のどれにするか
+- ~~Admin UI/API と Python core の呼び出し境界を process / HTTP / shared DB のどれにするか~~
+  → **解消済み**（ADR `docs/decisions/2026-06-22-admin-core-boundary.md`、#26）：
+  read 直読み / write は AdminCommand 経由の非同期 handoff に決定。
+  capability spec: `openspec/changes/issue-26-define-admin-core-boundary/specs/admin-api-boundary/spec.md`
 
 ## Related Issues
 

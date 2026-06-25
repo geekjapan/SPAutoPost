@@ -75,13 +75,35 @@ GET    /api/drafts/{draft_id}/audit-events
 
 ## Boundary with Python Core
 
-M1 では、Admin UI/API と Python core は PostgreSQL を共有 state として利用します。
+M1 の Admin UI/API と Python core の呼び出し境界は ADR `admin-core-boundary.md` で決定済み。
+capability spec `admin-api-boundary`（openspec/changes/issue-26-define-admin-core-boundary/specs/admin-api-boundary/spec.md）が契約の正本。
 
-- Python jobs: collect / normalize / generate / validate / publish
-- Admin UI/API: list / detail / edit / approve / publish request
-- PostgreSQL: shared state
+### Read — 直読み
 
-Admin UI/API は、原則として重い生成処理や投稿処理を直接実行しません。必要な操作は state を変更し、Python jobs が処理できるようにします。
+Admin API（TypeScript/Node）は DraftPost / ReviewEvent / AuditEvent の一覧・詳細・audit 参照を
+PostgreSQL から直接 read してよい。read 経路はドメイン状態を変更してはならない。
+
+### Write — AdminCommand 経由の非同期 handoff
+
+approve / reject / request-regeneration / edit / publish-request の状態遷移 Write は、
+Admin API が auth/RBAC とリクエスト形式 validation のみ実施し、idempotent な AdminCommand を
+1 件挿入して `accepted/pending` を返す。Admin API がドメイン状態機械を直接更新してはならない。
+
+### 責務分担
+
+| 層 | 責務 |
+|---|---|
+| Admin API (TS) | auth/RBAC、リクエスト形式 validation、idempotency_key 発番、AdminCommand enqueue |
+| Python core/job | pending command 消費、遷移妥当性検証、状態遷移、ReviewEvent 記録、AuditEvent 記録 |
+
+### 非同期 UX
+
+M1 のフィードバックは非同期（accepted/pending → succeeded/failed の後追い表示）。
+同期成功/失敗フィードバックと long-running Python HTTP サービスは M1 対象外。
+
+### idempotency_key
+
+Admin API server 側で発番する。client が request-id を供給した場合のみ併用して重複検知を強める。
 
 ## Authentication and Authorization
 
