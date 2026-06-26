@@ -4,6 +4,8 @@
 
 Accepted for MVP direction. Proposed for detailed authorization model.
 
+M1 実装（#29）: Admin API は Option A（Azure Container Apps Authentication / EasyAuth）で実装済み。`X-MS-CLIENT-PRINCIPAL` を信頼し、Entra app-role claim を viewer/reviewer/approver/publisher/admin に 1:1 mapping、未認証は 401、role 無しは 403。dev 認証代替は `ADMIN_AUTH_MODE=dev` の明示 opt-in でのみ有効で、既定は EasyAuth（本番安全側）、`NODE_ENV=production` との併用は起動時 fail-closed。Graph service 認証は本実装の対象外（分離維持）。詳細は OpenSpec change `issue-29-implement-entra-id-login-admin-api-ui` と `admin-api/src/auth.ts` を参照。
+
 ## Purpose
 
 この Spec は、SPAutoPost の Admin API / UI にログインする管理者ユーザーの認証方式、認可方針、監査要件を定義します。

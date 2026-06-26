@@ -1,3 +1,10 @@
+export {
+  devHeaderAuthenticator,
+  easyAuthAuthenticator,
+  resolveAuthenticator,
+  type AuthMode,
+  type Authenticator,
+} from "./auth.js";
 export { createNodeHandler, handleAdminApiRequest, type HttpRequest } from "./http.js";
 export { PostgresAdminApiStore } from "./postgres.js";
 export {
@@ -5,10 +12,10 @@ export {
   enqueueDraftCommand,
   getCommandStatus,
   getDraft,
+  isAdminRole,
   listAuditEvents,
   listDrafts,
   normalizeHeaders,
-  parsePrincipal,
   type ApiResponse,
 } from "./service.js";
 export type * from "./types.js";
