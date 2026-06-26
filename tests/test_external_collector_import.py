@@ -290,6 +290,18 @@ def test_vendor_advisory_ids_as_string_is_rejected(tmp_path: Path) -> None:
 
 
 @pytest.mark.unit
+def test_non_string_severity_is_rejected(tmp_path: Path) -> None:
+    """severity が文字列以外（リストなど）の場合、TypeError を起こさず reject される。"""
+    for bad_severity in [[], {}, 42]:
+        bad = {**_VALID_ADVISORY, "severity": bad_severity}
+        data = {**_VALID_PAYLOAD, "advisories": [bad]}
+        path = _make_json(tmp_path, data)
+        storage = _build_storage(tmp_path)
+        result = import_from_file(path, storage, now=_NOW)  # type: ignore[arg-type]
+        assert result.rejected_count == 1, f"expected reject for severity={bad_severity!r}"
+
+
+@pytest.mark.unit
 def test_advisory_id_is_scoped_to_producer(tmp_path: Path) -> None:
     """異なる producer が同じ advisory_id を持つ場合、SPAutoPost ID が衝突しない。"""
     payload_a = {**_VALID_PAYLOAD, "producer": "collector-a",
@@ -309,3 +321,24 @@ def test_advisory_id_is_scoped_to_producer(tmp_path: Path) -> None:
     assert id_a != id_b
     assert "collector-a" in id_a
     assert "collector-b" in id_b
+
+
+@pytest.mark.unit
+def test_advisory_id_no_collision_with_delimiter_ambiguity(tmp_path: Path) -> None:
+    """'-' 区切りが曖昧になるケース（"collector-a"+"ADV-001" vs "collector"+"a-ADV-001"）
+    でも advisory_id が衝突しない。"""
+    payload_a = {**_VALID_PAYLOAD, "producer": "collector-a",
+                 "advisories": [{**_VALID_ADVISORY, "advisory_id": "ADV-001"}]}
+    payload_b = {**_VALID_PAYLOAD, "producer": "collector",
+                 "advisories": [{**_VALID_ADVISORY, "advisory_id": "a-ADV-001"}]}
+
+    path_a = _make_json(tmp_path, payload_a, "da.json")
+    path_b = _make_json(tmp_path, payload_b, "db.json")
+    storage = _build_storage(tmp_path)
+
+    result_a = import_from_file(path_a, storage, now=_NOW)  # type: ignore[arg-type]
+    result_b = import_from_file(path_b, storage, now=_NOW)  # type: ignore[arg-type]
+
+    id_a = result_a.advisories[0].advisory_id
+    id_b = result_b.advisories[0].advisory_id
+    assert id_a != id_b

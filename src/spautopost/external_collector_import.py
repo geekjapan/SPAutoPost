@@ -174,7 +174,7 @@ def _validate_advisory(raw: Mapping[str, object], index: int) -> list[str]:
                     f"advisories[{index}].references[{ri}].url は http(s) URL である必要があります"
                 )
     severity = raw.get("severity")
-    if severity is not None and severity not in _SEVERITIES:
+    if severity is not None and (not isinstance(severity, str) or severity not in _SEVERITIES):
         issues.append(f"advisories[{index}].severity は無効な値です: {severity}")
     for key, pattern, name in [("cve_ids", _CVE_RE, "CVE ID"), ("jvn_ids", _JVN_RE, "JVN ID")]:
         val = raw.get(key)
@@ -270,6 +270,9 @@ def _to_storage_pair(
     raw_hash = _hash_json(dict(raw))
     source_record_id = f"ext-{producer}-{raw_hash[:12]}"
     raw_advisory_id = _nonempty_str(raw.get("advisory_id")) or f"{index}-{raw_hash[:8]}"
+    # Hash the (producer, advisory_id) tuple to make the final ID unambiguous regardless
+    # of whether producer or advisory_id contain the '-' delimiter.
+    advisory_id_hash = _hash_json({"producer": producer, "advisory_id": raw_advisory_id})[:12]
     title = str(raw["title"]).strip()
     summary = _nonempty_str(raw.get("summary")) or title
     refs: list[Mapping[str, str]] = []
@@ -299,7 +302,7 @@ def _to_storage_pair(
         created_at=timestamp,
     )
     advisory = Advisory(
-        advisory_id=f"ext-{producer}-{raw_advisory_id}",
+        advisory_id=f"ext-{producer}-{advisory_id_hash}",
         title=title,
         summary=summary,
         source_record_id=source_record_id,
