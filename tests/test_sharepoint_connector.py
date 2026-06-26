@@ -617,3 +617,21 @@ def test_token_provider_failure_records_failed_publication() -> None:
     stored = store.publications.get_by_idempotency_key(outcome.publication.idempotency_key)
     assert stored is not None
     assert stored.publication_status == "failed"
+
+
+@pytest.mark.unit
+def test_success_response_without_page_id_records_failure() -> None:
+    """A 201 with no 'id' in the body must not be recorded as published.
+
+    Recording it as 'published' would permanently lock the idempotency key
+    while leaving no page reference. The connector must record publish_failed
+    with retryable=False (retrying could create a duplicate page on Graph).
+    """
+    transport = _FakeTransport(GraphHttpResponse(status=201, body={}))
+    outcome = _connector(transport).publish_draft(_approved_draft())
+
+    assert outcome.posted is False
+    assert outcome.publication.publication_status == "failed"
+    assert outcome.publication.error_code == "publish_failed"
+    assert outcome.publication.retryable is False
+    assert outcome.publication.sharepoint_page_id is None

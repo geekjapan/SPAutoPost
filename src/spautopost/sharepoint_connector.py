@@ -408,6 +408,25 @@ class SharePointConnector:
 
         if response.status in (200, 201):
             page_id = _optional_str(response.body, "id")
+            if page_id is None:
+                # Graph returned a success status but no page id.  Recording this as
+                # "published" would lock the idempotency key permanently while leaving
+                # no page reference for later operations.  Treat it as a non-retryable
+                # failure: retrying could create a duplicate page if Graph did in fact
+                # create it, so manual investigation is required before re-submitting.
+                return self._record_failure(
+                    draft,
+                    key,
+                    advisory_ids,
+                    now,
+                    correlation,
+                    approver,
+                    publisher_principal=publisher_principal,
+                    error_code="publish_failed",
+                    retryable=False,
+                    status=response.status,
+                    claim_id=claim_id,
+                )
             # A created Graph page is a SharePoint *draft*; we record it as
             # publication_status="published" (the connector's write succeeded) with
             # operation="create" preserving the create-vs-promote distinction. News
