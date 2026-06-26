@@ -73,8 +73,9 @@ sharepoint:
   default_draft: true                                               # 必須: デフォルトは下書き
   allow_publish: false                                              # M1: SPAutoPost からの直接公開は行わない
   news_promote: false                                               # M1: News promote は非対象
-  require_approval: true                                            # 必須: 管理者承認後のみ投稿可
   idempotency_scope: site-and-page-library                          # 必須
+security:
+  require_approval: true                                            # 必須: 管理者承認後のみ投稿可
 ```
 
 `tenant_id`、`site_id`、`page_library_id` のいずれかが未設定の場合、アプリケーションは起動時バリデーションエラーを返します。
@@ -132,7 +133,7 @@ pending → publishing → published（下書きページ作成完了、SharePoi
 
 ### M1 の公開方針
 
-- SPAutoPost は Graph API publish エンドポイント（`/pages/{id}/microsoft.graph.sitePage/publish`）を M1 では呼び出しません。
+- SPAutoPost は Graph API publish エンドポイント（`/sites/{siteId}/pages/{pageId}/publish`）を M1 では呼び出しません。
 - 公開は SharePoint 画面から管理者が手動で行うか、SharePoint 側の承認フローに委ねます。
 - `news_promote: false` が設定されている場合、News promote エンドポイントは呼び出されません。
 - ログに `publish skipped (M1)` が記録されます。
