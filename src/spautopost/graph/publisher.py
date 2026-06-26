@@ -318,6 +318,30 @@ def publish_site_page(
                     advisory_id=advisory_id,
                 )
             ]
+            if promote:
+                client.publish_site_page(
+                    site_id=target_site_id,
+                    page_id=update_page_id,
+                    access_token=auth.access_token,
+                )
+                operation = "publish"
+                audits.append(
+                    _build_audit(
+                        event_type="publish_result",
+                        result="success",
+                        correlation_id=correlation_id,
+                        audit_event_id=id_factory(),
+                        now=now,
+                        operation="publish",
+                        target_site_id=target_site_id,
+                        target_page_library_id=target_page_library_id,
+                        actor=actor,
+                        service_principal=client_id,
+                        sharepoint_page_id=update_page_id,
+                        provider=provider,
+                        advisory_id=advisory_id,
+                    )
+                )
         else:
             created_page = client.create_site_page(
                 site_id=target_site_id,

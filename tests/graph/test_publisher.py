@@ -586,3 +586,50 @@ def test_update_failure_records_failed(
     assert result.publication.error_code == "authorization_failed"
     assert result.publication.retryable is False
     assert result.publication.operation == "update"
+
+
+def test_retry_update_with_promote_calls_publish_site_page(
+    store: StoragePort, payload: dict[str, Any], metadata: ProviderMetadata
+) -> None:
+    """update 経路で promote=True のとき publish_site_page が呼ばれ operation=publish になる。"""
+    key = build_idempotency_key(
+        draft_id="draft-1",
+        target_site_id="site-1",
+        target_page_library_id="lib-1",
+        advisory_ids=["adv-1"],
+        title="Example の脆弱性",
+    )
+    failed_pub = Publication(
+        publication_id="pub-failed-4",
+        draft_id="draft-1",
+        target_type="site-page",
+        target_site_id="site-1",
+        target_page_library_id="lib-1",
+        publication_status="failed",
+        idempotency_key=key,
+        sharepoint_page_id="existing-page-promote",
+        operation="create",
+        error_code="graph_rate_limited",
+        retryable=True,
+        created_at=NOW,
+        updated_at=NOW,
+    )
+    store.publications.upsert(failed_pub)
+
+    retry_client = FakePagesClient(page_id="page-promote")
+    result = publish_site_page(
+        payload,
+        dry_run=False,
+        promote=True,
+        store=store,
+        token_provider=FakeTokenProvider(),
+        client=retry_client,
+        **_common(payload, metadata),
+    )
+
+    assert retry_client.update_calls, "update_site_page should have been called"
+    assert retry_client.publish_calls, "publish_site_page should have been called with promote=True"
+    assert retry_client.create_calls == [], "create_site_page should NOT be called"
+    assert result.publication.publication_status == "published"
+    assert result.publication.sharepoint_page_id == "existing-page-promote"
+    assert result.publication.operation == "publish"
