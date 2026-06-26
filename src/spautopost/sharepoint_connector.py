@@ -57,12 +57,19 @@ _GRAPH_ALLOWED_ORIGINS: frozenset[str] = frozenset(
     }
 )
 
-# draft-composition.md の必須セクション順（「対象」は DraftPost に専用 field が無いため除外）。
+# draft-composition.md の必須セクション順（概要・影響は _SECTION_HEADINGS でループ処理）。
 _SECTION_HEADINGS: tuple[tuple[str, str], ...] = (
     ("概要", "summary_for_users"),
     ("影響", "impact"),
 )
 _DEADLINE_UNSET = "未定（要確認）"
+
+# draft-composition.md §Target Audience — audience フィールドから日本語ラベルへのマッピング。
+_AUDIENCE_LABELS: dict[str, str] = {
+    "general_users": "一般利用者",
+    "administrators": "管理者・運用担当者",
+    "mixed": "一般利用者・管理者",
+}
 
 TokenProvider = Callable[[], str]
 Clock = Callable[[], datetime]
@@ -668,6 +675,8 @@ def render_page_html(draft: DraftPost) -> str:
     parts: list[str] = [f"<h1>{html.escape(draft.title)}</h1>"]
     parts.append(_section("概要", draft.summary_for_users))
     parts.append(_section("影響", draft.impact))
+    audience_label = _AUDIENCE_LABELS.get(str(draft.audience), str(draft.audience))
+    parts.append(_section("対象", audience_label))
     parts.append(_list_section("利用者が行う対応", draft.required_actions))
     parts.append(_list_section("管理者が行う対応", draft.admin_actions))
     deadline = draft.deadline.isoformat() if draft.deadline is not None else _DEADLINE_UNSET

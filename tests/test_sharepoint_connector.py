@@ -354,6 +354,20 @@ def test_urllib_transport_rejects_non_https() -> None:
         urllib_transport("POST", "http://insecure/api", {}, {"a": 1})
 
 
+@pytest.mark.unit
+def test_render_page_html_includes_audience_section() -> None:
+    rendered = render_page_html(_approved_draft(audience="mixed"))
+    assert "対象" in rendered
+    assert "一般利用者・管理者" in rendered
+
+
+@pytest.mark.unit
+def test_render_page_html_audience_unknown_value_falls_back_to_raw() -> None:
+    rendered = render_page_html(_approved_draft(audience="custom-group"))
+    assert "対象" in rendered
+    assert "custom-group" in rendered
+
+
 # --- regression tests for review-comment fixes ---
 
 
