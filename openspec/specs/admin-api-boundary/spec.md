@@ -1,10 +1,10 @@
 # admin-api-boundary Specification
 
 ## Purpose
-TBD - created by syncing change issue-26-define-admin-core-boundary. Update Purpose after sync.
-
+Admin UI/API（TypeScript/Node）と Python core の M1 境界を定義する。
+Admin API は read を PostgreSQL 直読み、write を AdminCommand enqueue に限定し、
+Python core が状態遷移、validation、ReviewEvent / AuditEvent 記録、publish 処理を所有する。
 ## Requirements
-
 ### Requirement: Read は Admin API による直読み
 
 Admin API（TypeScript/Node）は、DraftPost / ReviewEvent / AuditEvent の一覧・詳細・audit 参照を PostgreSQL から直接 read してよい（SHALL）。read 経路はドメイン状態を変更してはならない（MUST NOT）。
@@ -49,6 +49,7 @@ M1 の reviewer 操作フィードバックは非同期（accepted/pending → s
 - **WHEN** 管理者が DraftPost 本文を修正して保存する
 - **THEN** Admin API は edit を AdminCommand として enqueue し、UI は楽観反映したうえで pending→saved/failed を後追い表示する（content mutation も Python 所有）
 
+
 ### Requirement: 状態遷移マップ（command_type × DraftStatus）
 
 Python core は下記の状態遷移マップに従って AdminCommand を処理しなければならない（SHALL）。
@@ -70,10 +71,22 @@ Python core は下記の状態遷移マップに従って AdminCommand を処理
 - **WHEN** DraftStatus が `published` の DraftPost に対して approve command を処理する
 - **THEN** command は `failed`（error_code 付き）になり DraftStatus は変化しない
 
-### Requirement: idempotency_key は Admin API server が発番
+### Requirement: state-changing request は client Idempotency-Key を必須にする
 
-Admin API は AdminCommand の idempotency_key を server 側で発番しなければならない（SHALL）。client が request-id を供給した場合のみ、それを併用して重複検知を強めてよい（client 供給は任意）。
+Admin API は state-changing な `PATCH` / `POST` 要求に対し、client 供給の `Idempotency-Key` を必須にしなければならない（SHALL）。Admin API は route / draft / command type と client key から保存用の AdminCommand `idempotency_key` を導出してよい（MAY）。client key が無い状態変更要求を受け付けてはならない（MUST NOT）。
 
-#### Scenario: server 発番による重複吸収
-- **WHEN** client が request-id を供給せずに同一操作を二重送信する
-- **THEN** Admin API は server 発番の idempotency_key により重複を吸収し、新規 command を二重生成しない
+#### Scenario: client key による retry 重複吸収
+- **WHEN** client が同一 `Idempotency-Key` で同一操作を再送する
+- **THEN** Admin API は新規 command を二重生成せず、既存 command の status を返す
+
+#### Scenario: client key が無い状態変更要求を拒否する
+- **WHEN** client が `Idempotency-Key` 無しで approve / edit / publish-request を要求する
+- **THEN** Admin API は AdminCommand を作成せず、validation error を返す
+
+### Requirement: command status read path
+
+Admin API は非同期 reviewer UX のため、AdminCommand の status / error_code / error_message を read できる endpoint を提供しなければならない（SHALL）。command status read は状態を変更してはならない（MUST NOT）。
+
+#### Scenario: command status を取得する
+- **WHEN** 管理者が accepted/pending 応答に含まれる command_id の status を要求する
+- **THEN** Admin API は pending / processing / succeeded / failed / cancelled と error details を返す

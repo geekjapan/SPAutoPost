@@ -1,0 +1,23 @@
+# Build context = repo root for deploy/Dockerfile.core and deploy/Dockerfile.admin.
+# Keep the context lean and never copy local config / data / caches into images.
+.git
+.github
+.venv
+venv
+node_modules
+admin-api/dist
+__pycache__
+*.py[cod]
+*.egg-info
+build
+dist
+.pytest_cache
+.ruff_cache
+.mypy_cache
+.coverage
+htmlcov
+coverage.xml
+graphify-out
+# Never copy real local config or local data into an image (secrets live there).
+config/*.yml
+data

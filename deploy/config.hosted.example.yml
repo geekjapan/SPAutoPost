@@ -1,0 +1,42 @@
+# SPAutoPost hosted (Azure Container Apps) 設定サンプル。
+# local 用は repo 直下の config.example.yml（sqlite / development）。こちらは hosted
+# 用（postgresql / production）で、両者で local と hosted の設定分離を明示する。
+#
+# Secret は値を直書きせず env:NAME 参照のみ。値は Container Apps の secret ref から
+# 環境変数として注入する（deploy/hosted.env.example 参照）。
+# 正本: docs/specs/configuration.md, docs/specs/deployment.md
+
+app:
+  environment: production # hosted は production
+  dry_run: true # 既定 true。publish は常に人間ゲート
+  log_level: info
+
+server:
+  admin_ui_enabled: true
+  admin_api_enabled: true
+  auth_provider: entra_id
+
+storage:
+  provider: postgresql # hosted は Azure Database for PostgreSQL
+  database_url: env:SPAUTOPOST_DATABASE_URL
+
+llm:
+  provider: test_mock # M1 skeleton は deterministic mock。実 provider は後続 Issue
+  prompt_version: v1
+
+sharepoint:
+  mode: site-page
+  default_draft: true
+  allow_publish: false # publish は人間ゲート。true 化は require_approval=true が前提
+  tenant_id: env:SPAUTOPOST_TENANT_ID
+  site_id: env:SPAUTOPOST_SHAREPOINT_SITE_ID
+  page_library_id: env:SPAUTOPOST_SHAREPOINT_PAGE_LIBRARY_ID
+
+graph:
+  local_poc_auth: delegated
+  hosted_auth: undecided # hosted 認証方式は未確定（別 Issue で確定）
+
+security:
+  block_auto_publish: true
+  require_approval: true
+  redact_secrets_in_logs: true

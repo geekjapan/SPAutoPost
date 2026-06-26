@@ -1,18 +1,66 @@
+# SPAutoPost パッケージング/ツーリング設定（Python MVP core）。
+# 採用ツール: ruff(lint+format) / black / mypy / pytest(+coverage)。
+# 根拠: docs/decisions/2026-06-22-mvp-runtime-and-language.md, .claude/rules/ecc/python/
+#       openspec/changes/issue-4-initialize-application-skeleton/
+
 [build-system]
-requires = ["setuptools>=61"]
-build-backend = "setuptools.build_meta"
+requires = ["hatchling"]
+build-backend = "hatchling.build"
 
 [project]
 name = "spautopost"
-version = "0.0.0"
-description = "SharePoint auto-post — storage baseline (canonical entities + AdminCommand queue)"
-requires-python = ">=3.11"
-dependencies = []
+version = "0.0.1"
+description = "SharePoint security-advisory auto-posting tool (MVP core)"
+readme = "README.md"
+requires-python = ">=3.12"
+# ランタイム依存は最小化（YAML 設定のみ）。validation は stdlib で実装する。
+dependencies = ["pyyaml>=6.0"]
 
-# psycopg は PostgreSQL adapter を実走させる時だけ必要（遅延 import）。
-# 通常のテストは SQLite substrate で動くため zero-install。
 [project.optional-dependencies]
+dev = ["ruff", "mypy", "pytest", "pytest-cov", "types-pyyaml"]
+# PostgreSQL backend は任意 extra。psycopg は postgres 分岐でのみ遅延 import する。
 postgres = ["psycopg[binary]>=3.1"]
 
-[tool.setuptools.packages.find]
-where = ["src"]
+[project.scripts]
+spautopost = "spautopost.cli:main"
+# Azure Container Apps Jobs entrypoint: spautopost-job <job-name>
+spautopost-job = "spautopost.job_entrypoint:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/spautopost"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+# E/F=pyflakes・pycodestyle, I=isort, B=bugbear, UP=pyupgrade, S=flake8-bandit(security)
+select = ["E", "F", "I", "B", "UP", "S"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101"]  # テストでの assert を許可
+
+[tool.black]
+line-length = 100
+target-version = ["py312"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+addopts = "-q"
+testpaths = ["tests"]
+markers = [
+  "unit: unit tests",
+  "integration: integration tests",
+]
+
+[tool.coverage.run]
+source = ["src"]
+
+[tool.coverage.report]
+fail_under = 80
+show_missing = true

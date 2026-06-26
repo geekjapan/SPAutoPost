@@ -1,19 +1,26 @@
 graphify-out/
 
+# 実 config は repo に保存しない（config.example.yml のみコミット）
+/config/*.yml
+
 # Python
 __pycache__/
 *.py[cod]
+.venv/
+venv/
 *.egg-info/
 build/
 dist/
-.venv/
-venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+coverage.xml
 
-# Tooling / machine-local config
-.claude/
-.codex/
+# Node / TypeScript admin API
+node_modules/
+/admin-api/dist/
 
-# Env / secrets
-.env
-.env.*
-.worktrees/
+# ローカルデータ
+/data/

@@ -1,0 +1,38 @@
+# orca.yaml — Orca (stablyai/orca) repo-level configuration for SPAutoPost.
+#
+# Orca をマルチエージェントオーケストレータとして使うための共有設定。
+# 各 worktree（workspace）で起動する Claude Code / Codex / OpenCode / Pi が、
+# 同じ「GitHub 駆動・仕様駆動」のベースラインから作業を始められるようにする。
+#
+# 正本は GitHub Issue / Milestone / Spec。運用詳細は次を参照:
+#   - AGENTS.md（実装エージェント向け単一正本）
+#   - docs/runbooks/multi-agent-orchestration.md（自律マルチエージェント運用）
+#
+# Orca がサポートするキー: scripts.{setup, archive, issueCommand}
+# インデント規則: フックキーは 2 スペース、コマンド行は 4 スペース。
+#   setup        : worktree（workspace）作成時に実行
+#   issueCommand : GitHub issue に紐づけて worktree を起動したときに実行
+#   archive      : worktree 撤去時に実行
+# Orca が注入する主な環境変数: ORCA_WORKSPACE_NAME / ORCA_WORKTREE_PATH /
+#   ORCA_WORKTREE_ID / ORCA_ROOT_PATH / ORCA_ISSUE_FIELDS（issue 連携時）
+
+scripts:
+  setup: |
+    set -e
+    echo "[orca:setup] SPAutoPost worktree: ${ORCA_WORKSPACE_NAME:-?} (${ORCA_WORKTREE_PATH:-$PWD})"
+    echo "[orca:setup] 正本=GitHub Issue/Milestone/Spec。手順=AGENTS.md / docs/runbooks/multi-agent-orchestration.md"
+    git fetch origin --prune || true
+    if command -v openspec >/dev/null 2>&1; then openspec list || true; else echo "[orca:setup] openspec CLI 未検出 (npm i -g openspec)"; fi
+    echo "[orca:setup] agmsg team=spautopost で他エージェントと協調する（/agmsg）"
+  issueCommand: |
+    set -e
+    echo "[orca:issue] linked issue: ${ORCA_ISSUE_FIELDS:-<none>}"
+    echo "[orca:issue] 仕様駆動ループの開始手順:"
+    echo "  1) Issue の 目的 / 受け入れ条件 / 関連 Spec / 非対象 を確認（不足なら停止し Issue 更新を要求）"
+    echo "  2) OpenSpec change を作成/更新: Claude は必ず opsx:propose/opsx:ff を実装前に実行、Codex は openspec-*（change ID = issue-<番号>-<kebab>）"
+    echo "  3) OpenSpec の検証: openspec validate <change-id> --strict を実行してパスさせる"
+    echo "  4) Claude の ecc:* は OpenSpec 後段で使用: self-grill-across-multi-propose → opsx:apply（TDD 手順）→ code-review/security-review → PR"
+    echo "  詳細: docs/runbooks/multi-agent-orchestration.md / docs/openspec-workflow.md"
+  archive: |
+    echo "[orca:archive] worktree ${ORCA_WORKSPACE_NAME:-?} を撤去します。"
+    echo "[orca:archive] 未マージの OpenSpec change / PR / agmsg 未読が無いか確認すること。"

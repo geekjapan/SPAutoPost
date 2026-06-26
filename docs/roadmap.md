@@ -6,9 +6,9 @@ SPAutoPost は、社内 SharePoint 掲示板へのセキュリティ情報掲載
 
 初期段階では、脆弱性情報の収集、整理、生成 AI による掲示板原稿作成、SharePoint への下書き投稿までを一体で実装します。将来的には、クローラーや情報整理機能を別プログラムへ分離し、SPAutoPost は「正規化済みセキュリティ情報を社内掲示板へ安全に掲載する投稿基盤」に責務を絞ります。
 
-## 推奨 Milestone
+## GitHub Milestone
 
-この環境では GitHub Milestone を直接作成できないため、以下を GitHub Milestone 名として作成することを推奨します。
+SPAutoPost は GitHub Milestone と Issue を正本にして進めます。M0〜M6 の GitHub Milestone は作成済みで、各 Issue は対応する Milestone に割り当て済みです。
 
 ### M0: Project Foundation
 
@@ -151,6 +151,29 @@ SPAutoPost は、社内 SharePoint 掲示板へのセキュリティ情報掲載
 5. M4 でレビュー/承認/公開ワークフローを整える。
 6. M5 で自動化と外部 collector 分離に備える。
 7. M6 で本番運用に耐える形にする。
+
+## Issue #1 Tracking Snapshot
+
+この section は Issue #1 の完了条件に対する 2026-06-24 時点の確認結果です。
+
+| Check | Result | Evidence |
+|---|---|---|
+| GitHub Milestone が作成されている | Done | M0: Project Foundation から M6: Production Hardening まで作成済み |
+| M0〜M6 の Issue が各 Milestone に割り当てられている | Done | GitHub Issue #2〜#36 は M0〜M6 のいずれかに割り当て済み（#1 は tracking parent のため Milestone なし） |
+| 初期実装順序が合意されている | Done | 本文の「初期リリースの推奨順序」と `docs/decisions/2026-06-22-m1-implementation-order.md` |
+| OpenSpec change 作成ルールが実装エージェントに認識されている | Done | `AGENTS.md`、`CLAUDE.md`、`docs/openspec-workflow.md`、`docs/runbooks/multi-agent-orchestration.md` |
+
+Milestone snapshot:
+
+| Milestone | Open Issues | Closed Issues |
+|---|---:|---:|
+| M0: Project Foundation | 3 | 4 |
+| M1: MVP Manual-to-SharePoint Draft | 6 | 9 |
+| M2: Vulnerability Collection and Normalization | 4 | 0 |
+| M3: AI Drafting and Provider Strategy | 4 | 0 |
+| M4: Review, Approval, and Publishing Workflow | 2 | 0 |
+| M5: Automation and External Collector Boundary | 1 | 0 |
+| M6: Production Hardening | 2 | 0 |
 
 ## 重要な設計判断
 

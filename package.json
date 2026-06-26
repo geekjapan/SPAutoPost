@@ -1,0 +1,24 @@
+{
+  "name": "spautopost",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "description": "SPAutoPost Python core plus TypeScript Admin API skeleton",
+  "scripts": {
+    "admin-api:build": "tsc -p admin-api/tsconfig.json",
+    "admin-api:typecheck": "tsc -p admin-api/tsconfig.json --noEmit",
+    "admin-api:test": "npm run admin-api:build && node --test \"admin-api/dist/test/**/*.test.js\"",
+    "admin-api:check": "npm run admin-api:typecheck && npm run admin-api:test"
+  },
+  "dependencies": {
+    "pg": "^8.16.3"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.3",
+    "@types/pg": "^8.15.4",
+    "typescript": "^5.8.3"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}
