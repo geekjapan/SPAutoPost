@@ -14,7 +14,7 @@ from typing import Any
 import yaml
 
 from .errors import ConfigValidationError
-from .secrets import iter_secret_refs
+from .secrets import is_secret_ref, iter_secret_refs, secret_env_name
 
 ENVIRONMENTS = frozenset({"development", "test", "production"})
 STORAGE_PROVIDERS = frozenset({"postgresql", "sqlite"})
@@ -177,7 +177,7 @@ def validate_config(raw: Mapping[str, Any], environ: Mapping[str, str]) -> Confi
     storage = _validate_storage(raw, issues)
     sharepoint = _validate_sharepoint(raw, issues)
     security = _validate_security(raw, issues)
-    llm = _validate_llm(raw, issues)
+    llm = _validate_llm(raw, issues, environ)
     graph = _validate_graph(raw, issues)
     _validate_publish_consistency(sharepoint, security, issues)
     _validate_secret_refs(raw, environ, issues)
@@ -346,7 +346,9 @@ def _validate_security(raw: Mapping[str, Any], issues: list[str]) -> SecurityCon
     )
 
 
-def _validate_llm(raw: Mapping[str, Any], issues: list[str]) -> LLMConfig:
+def _validate_llm(
+    raw: Mapping[str, Any], issues: list[str], environ: Mapping[str, str]
+) -> LLMConfig:
     sec = _section(raw, "llm")
     provider = sec.get("provider")
     if provider not in LLM_PROVIDERS:
@@ -377,6 +379,22 @@ def _validate_llm(raw: Mapping[str, Any], issues: list[str]) -> LLMConfig:
             "obtain information-security department approval first "
             "(see docs/specs/llm-provider.md)"
         )
+    if provider == "generic_api":
+        if not endpoint_url:
+            issues.append("llm.endpoint_url is required when llm.provider=generic_api")
+        else:
+            if is_secret_ref(endpoint_url):
+                resolved_url = environ.get(secret_env_name(endpoint_url), "")
+            else:
+                resolved_url = endpoint_url
+            if resolved_url and not resolved_url.startswith("https://"):
+                issues.append(
+                    "llm.endpoint_url must use https:// to protect Bearer token in transit"
+                )
+        if not model:
+            issues.append("llm.model is required when llm.provider=generic_api")
+        if not auth_env_var:
+            issues.append("llm.auth_env_var is required when llm.provider=generic_api")
     return LLMConfig(
         provider=provider if isinstance(provider, str) else "",
         prompt_version=prompt_version,
