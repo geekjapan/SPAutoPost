@@ -439,6 +439,7 @@ def _run_publish_draft(input_file: Path, config: Config, dry_run: bool, *, promo
             store=storage,
             now=now,
             draft_id=draft_id,
+            draft_status=draft_post.status,
             title=draft.title,
             target_site_id=target_site_id,
             target_page_library_id=target_page_library_id,

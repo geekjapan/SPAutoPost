@@ -3,9 +3,7 @@
 ## Purpose
 
 SPAutoPost が SharePoint お知らせ掲示板に自動投稿するための発行機能を定義する。投稿形式・認証方式・設定項目・ライフサイクル・制約（M1 スコープ）を規定する。
-
 ## Requirements
-
 ### Requirement: 投稿先は SharePoint Site Page / News article とする
 
 SPAutoPost は SharePoint お知らせ掲示板への投稿に SharePoint Site Page / News article 形式を使用しなければならない（SHALL）。SharePoint List item は M1 の主経路に含まない。
@@ -156,3 +154,16 @@ M1 では SharePoint 投稿にカテゴリ（taxonomy/metadata）・優先度（
 #### Scenario: 本文中のインライン URL は投稿に含まれる
 - **WHEN** DraftPost の本文テキストに URL が含まれている
 - **THEN** URL はテキストとして本文に含まれ、SharePoint Site Page に投稿される
+
+### Requirement: approved 状態の DraftPost のみ publish ゲートを通過できる
+
+SPAutoPost は `DraftPost.status` が `"approved"` でない場合、SharePoint への投稿処理（dry-run 含む）を開始してはならない（SHALL NOT）。ゲート違反は `PublishGateError` として送出し、失敗 Publication は記録しない。
+
+#### Scenario: approved でない draft は publish 経路で即座に拒否される
+- **WHEN** `status="generated"` の DraftPost で `publish_site_page()` が呼ばれる
+- **THEN** `PublishGateError` が送出され、Publication / AuditEvent は記録されない
+
+#### Scenario: approved draft は publish 経路を通過できる
+- **WHEN** `status="approved"` の DraftPost で `publish_site_page()` が呼ばれる
+- **THEN** ゲートは通過し、dry-run または live publish が続行する
+
