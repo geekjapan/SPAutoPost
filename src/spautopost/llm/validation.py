@@ -124,8 +124,7 @@ def _check_required_sections(draft: DraftOutput) -> list[ValidationIssue]:
 def _check_references(draft: DraftOutput) -> list[ValidationIssue]:
     refs = draft.references or ()
     has_valid_url = any(
-        isinstance(r, dict) and isinstance(r.get("url"), str) and r["url"].strip()
-        for r in refs
+        isinstance(r, dict) and isinstance(r.get("url"), str) and r["url"].strip() for r in refs
     )
     if has_valid_url:
         return []
