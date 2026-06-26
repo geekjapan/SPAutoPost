@@ -35,6 +35,7 @@ class SourceFetchQuery:
     published_to: datetime | None = None
     modified_from: datetime | None = None
     modified_to: datetime | None = None
+    url: str | None = None  # Firecrawl adapter 用の URL 指定フィールド
 
 
 @dataclass(frozen=True)

@@ -20,6 +20,8 @@ dependencies = ["pyyaml>=6.0"]
 dev = ["ruff", "mypy", "pytest", "pytest-cov", "types-pyyaml"]
 # PostgreSQL backend は任意 extra。psycopg は postgres 分岐でのみ遅延 import する。
 postgres = ["psycopg[binary]>=3.1"]
+# Firecrawl spike 評価用（M1 optional）。採用確定後に dev/runtime に昇格する。
+spike = ["firecrawl-py>=4.0"]
 
 [project.scripts]
 spautopost = "spautopost.cli:main"
