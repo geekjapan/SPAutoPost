@@ -101,12 +101,22 @@ Azure Container Apps / Jobs で利用する managed identity です。
 
 ### 暫定 permission セット（M1 検証対象）
 
+#### Local PoC（delegated permission / Device Code Flow）
+
+| Permission | 種別 | 用途 |
+|---|---|---|
+| `Sites.ReadWrite.All` | Delegated（work/school） | Site Page / News 記事の作成・更新（Microsoft Docs 記載の最小 delegated 権限） |
+
+`Pages.ReadWrite.All` は sitePage create API の delegated permission として記載されていない（[Microsoft Graph permissions reference](https://learn.microsoft.com/en-us/graph/api/sitepage-create?view=graph-rest-1.0#permissions)）。local PoC で `Sites.ReadWrite.All`（Delegated）を付与することで Device Code Flow 経由のページ作成が可能になる。**注意**: Delegated `Sites.ReadWrite.All` は local PoC 限定。Azure hosted scheduled job の本番認証には使用しない。
+
+#### Azure hosted runtime（application permission / managed identity）
+
 | Permission | 種別 | 用途 |
 |---|---|---|
 | `Sites.Selected` | Application | 対象 site への読み書きスコープ限定（推奨） |
-| `Pages.ReadWrite.All` | Application | Site Page / News 記事の作成・更新（Sites.Selected 対応状況による） |
+| `Pages.ReadWrite.All` | Application | Site Page / News 記事の作成・更新（Sites.Selected 対応状況による、M1 検証） |
 
-**M1 で確認すること**: `Sites.Selected` + `Pages.ReadWrite.All` の組み合わせで Site Page / News の作成・更新・公開が可能か。`Pages.ReadWrite.All` が site page 作成に対応していない場合（Microsoft Docs では `Sites.ReadWrite.All` が application permission として記載されている）、`Sites.ReadWrite.All` を例外的に採用し decision record に理由を記録する。**注意**: `Sites.ReadWrite.All` は tenant 全体に有効な permission であり、`Sites.Selected` を同時に付与しても `Sites.ReadWrite.All` のスコープは限定されない。`Sites.ReadWrite.All` フォールバック採用時の補完制御として、アプリケーションレベルで投稿先を `sharepoint.site_id` に限定し、すべての Graph 呼び出しを audit log に記録することを必須とする。
+**M1 で確認すること**: `Sites.Selected` + `Pages.ReadWrite.All`（Application）の組み合わせで Site Page / News の作成・更新・公開が可能か。`Pages.ReadWrite.All` が site page 作成に対応していない場合（Microsoft Docs では `Sites.ReadWrite.All` が application permission として記載されている）、`Sites.ReadWrite.All` を例外的に採用し decision record に理由を記録する。**注意**: `Sites.ReadWrite.All` は tenant 全体に有効な permission であり、`Sites.Selected` を同時に付与しても `Sites.ReadWrite.All` のスコープは限定されない。`Sites.ReadWrite.All` フォールバック採用時の補完制御として、アプリケーションレベルで投稿先を `sharepoint.site_id` に限定し、すべての Graph 呼び出しを audit log に記録することを必須とする。
 
 ## SharePoint 対象範囲の限定
 
