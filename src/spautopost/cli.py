@@ -119,6 +119,13 @@ def build_parser() -> argparse.ArgumentParser:
         "publish-approved",
         help="pending な publish_request AdminCommand を処理し、approved DraftPost を投稿する",
     )
+    import_external = sub.add_parser(
+        "import-external",
+        help="外部 collector が生成した JSON/YAML ファイルから normalized advisory を import する",
+    )
+    import_external.add_argument(
+        "input_file", type=Path, help="外部 collector の import ファイル（JSON または YAML）"
+    )
     return parser
 
 
@@ -166,6 +173,8 @@ def _dispatch(args: argparse.Namespace, config: Config, dry_run: bool) -> int:
         return _run_sample_source_job(config, dry_run)
     if command == "publish-approved":
         return _run_publish_approved(config, dry_run)
+    if command == "import-external":
+        return _run_import_external(args.input_file, config)
     print(f"unknown command: {command}", file=sys.stderr)  # pragma: no cover
     return EXIT_RUNTIME_ERROR  # pragma: no cover
 
@@ -687,6 +696,49 @@ def _run_publish_approved(config: Config, dry_run: bool) -> int:
         return EXIT_RUNTIME_ERROR
     finally:
         storage.close()
+
+
+def _run_import_external(input_file: Path, config: Config) -> int:
+    """外部 collector の import ファイルを schema 検証して storage に保存する。"""
+    from .external_collector_import import ExternalCollectorImportError, import_from_file
+    from .storage.errors import StorageError
+    from .storage.factory import build_storage
+
+    try:
+        storage = build_storage(config.storage)
+    except StorageError as exc:
+        print(f"storage init failed: {exc}", file=sys.stderr)
+        return EXIT_RUNTIME_ERROR
+
+    try:
+        storage.migrate()
+        result = import_from_file(input_file, storage)
+    except FileNotFoundError:
+        print(f"import file not found: {input_file}", file=sys.stderr)
+        return EXIT_RUNTIME_ERROR
+    except OSError as exc:
+        print(f"import file read failed: {exc}", file=sys.stderr)
+        return EXIT_RUNTIME_ERROR
+    except ExternalCollectorImportError as exc:
+        print(f"import validation failed: {exc}", file=sys.stderr)
+        return EXIT_INPUT_INVALID
+    except StorageError as exc:
+        print(f"import storage failed: {exc}", file=sys.stderr)
+        return EXIT_RUNTIME_ERROR
+    finally:
+        storage.close()
+
+    summary = {
+        "accepted_count": result.accepted_count,
+        "rejected_count": result.rejected_count,
+        "advisory_ids": [adv.advisory_id for adv in result.advisories],
+    }
+    if result.rejected_records:
+        summary["rejected_reasons"] = [
+            {"index": r.index, "reason": r.reason} for r in result.rejected_records
+        ]
+    print(json.dumps(summary, ensure_ascii=False, indent=2))
+    return EXIT_OK
 
 
 def _apply_migrations(storage: object) -> list[str]:

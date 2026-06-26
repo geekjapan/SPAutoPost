@@ -13,6 +13,7 @@ Safety policy (M1):
   token the job exits with a runtime error (no commands are claimed).
 
 Design / spec: openspec/changes/issue-25-add-azure-container-apps-deployment-skeleton/
+              openspec/changes/issue-21-add-scheduler-external-collector-boundary/
 """
 
 from __future__ import annotations
@@ -21,6 +22,7 @@ import sys
 from collections.abc import Sequence
 
 from .cli import main as cli_main
+from .scheduler import JobContext, build_job_context
 
 EXIT_UNKNOWN_JOB = 2
 
@@ -56,7 +58,13 @@ def run_job(job: str) -> int:
     except KeyError:
         _print_usage(f"unknown job: {job}")
         return EXIT_UNKNOWN_JOB
+    _context = build_job_context(job)  # noqa: F841 — available for audit logging
     return cli_main(argv)
+
+
+def get_job_context(job: str) -> JobContext:
+    """Return the JobContext for a job name without executing it."""
+    return build_job_context(job)
 
 
 def main(argv: Sequence[str] | None = None) -> int:
