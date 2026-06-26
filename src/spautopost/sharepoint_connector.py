@@ -248,8 +248,17 @@ class SharePointConnector:
         approver: str | None,
         publisher_principal: str | None,
     ) -> PublishOutcome:
+        # Reuse the existing publication_id when a prior dry-run row exists for this
+        # idempotency key.  The real storage backends upsert by publication_id (PK) and
+        # enforce a UNIQUE constraint on idempotency_key, so a fresh publication_id would
+        # cause a constraint violation on the second dry-run of the same draft.
+        prior_id: str | None = None
+        if self.store is not None:
+            prior = self.store.publications.get_by_idempotency_key(key)
+            if prior is not None and prior.publication_status == "dry_run":
+                prior_id = prior.publication_id
         publication = Publication(
-            publication_id=self.id_factory(),
+            publication_id=prior_id or self.id_factory(),
             draft_id=draft.draft_id,
             target_type="site-page",
             target_site_id=self.site_id,
@@ -315,9 +324,16 @@ class SharePointConnector:
                     existing, key, advisory_ids, now, correlation, approver, publisher_principal
                 )
             else:
-                # Existing "failed" (or "dry_run") row — transition it to "publishing"
-                # to claim the slot before proceeding, using the same publication_id so
-                # the subsequent upsert updates in-place rather than inserting a new row.
+                # Existing "failed" row — transition it to "publishing" to claim the slot
+                # before proceeding, using the same publication_id so the subsequent upsert
+                # updates in-place rather than inserting a new row.
+                #
+                # PoC limitation: two concurrent workers retrying the same "failed" row
+                # can both reach this branch (both saw the row before either upsert lands)
+                # and both issue a Graph POST.  Closing this race requires an atomic
+                # compare-and-swap (e.g. UPDATE … WHERE status='failed') in the storage
+                # port; that is deferred per the spec ("a 'failed' row allows retry" /
+                # "stale 'publishing' entries are deferred to a future cleanup/TTL").
                 self.store.publications.upsert(
                     _dc_replace(existing, publication_status="publishing", updated_at=now)
                 )

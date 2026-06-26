@@ -514,3 +514,26 @@ def test_claim_id_is_reused_after_failed_row_on_successful_retry() -> None:
     assert stored is not None
     assert stored.publication_id == original_id
     assert stored.publication_status == "published"
+
+
+@pytest.mark.unit
+def test_repeated_dry_run_reuses_existing_publication_id() -> None:
+    """Second dry-run of the same draft must not raise a UNIQUE violation.
+
+    The real storage backends enforce a UNIQUE constraint on idempotency_key and
+    upsert by publication_id (PK).  A second dry-run that mints a fresh
+    publication_id would hit the constraint; reusing the prior id lets upsert
+    UPDATE the existing row in-place.
+    """
+    store = _StoreFake()
+    draft = _approved_draft()
+    connector = _connector(_exploding_transport, dry_run=True, store=store)
+
+    first = connector.publish_draft(draft)
+    assert first.publication.publication_status == "dry_run"
+    first_id = first.publication.publication_id
+
+    # Second dry-run — must not raise, must reuse the same publication_id.
+    second = connector.publish_draft(draft)
+    assert second.publication.publication_status == "dry_run"
+    assert second.publication.publication_id == first_id
