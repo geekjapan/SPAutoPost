@@ -290,13 +290,13 @@ External Sources
 
 MVP 実装前または M1 途中で決める必要がある未決事項:
 
-- Azure hosted runtime の Graph 認証方式を delegated / application / managed identity のどれにするか
 - Azure OpenAI / Foundry provider を M1 に含めるか、M3 まで待つか
 - Container Apps の app / job 分割をどこまで M1 に含めるか
 
 解消済み:
 
 - Admin UI/API と Python core の呼び出し境界は #26 / ADR
+- Azure hosted runtime の Graph 認証方式: user-assigned managed identity（第一候補）、app-only access（fallback）— #27 で確定
   `docs/decisions/2026-06-22-admin-core-boundary.md` で解消済み。M1 では
   read は PostgreSQL 直読み、write は `AdminCommand` 経由の非同期 handoff とする。
 

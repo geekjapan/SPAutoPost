@@ -106,14 +106,14 @@ Azure Container Apps / Jobs で利用する managed identity です。
 | `Sites.Selected` | Application | 対象 site への読み書きスコープ限定（推奨） |
 | `Pages.ReadWrite.All` | Application | Site Page / News 記事の作成・更新（Sites.Selected 対応状況による） |
 
-**M1 で確認すること**: `Sites.Selected` + `Pages.ReadWrite.All` の組み合わせで Site Page / News の作成・更新・公開が可能か。`Pages.ReadWrite.All` が Graph API の site page 作成に対応していない場合（Microsoft Docs では `Sites.ReadWrite.All` が application permission として記載されている）、`Sites.ReadWrite.All` を例外的に採用し、対象 site を `Sites.Selected` で可能な限り限定した上で decision record に理由を記録する。
+**M1 で確認すること**: `Sites.Selected` + `Pages.ReadWrite.All` の組み合わせで Site Page / News の作成・更新・公開が可能か。`Pages.ReadWrite.All` が site page 作成に対応していない場合（Microsoft Docs では `Sites.ReadWrite.All` が application permission として記載されている）、`Sites.ReadWrite.All` を例外的に採用し decision record に理由を記録する。**注意**: `Sites.ReadWrite.All` は tenant 全体に有効な permission であり、`Sites.Selected` を同時に付与しても `Sites.ReadWrite.All` のスコープは限定されない。`Sites.ReadWrite.All` フォールバック採用時の補完制御として、アプリケーションレベルで投稿先を `sharepoint.site_id` に限定し、すべての Graph 呼び出しを audit log に記録することを必須とする。
 
 ## SharePoint 対象範囲の限定
 
 - 投稿対象 SharePoint site は設定ファイル（`sharepoint.site_id`）で明示的に指定する。
 - 設定ファイルに記載されていない site への投稿は拒否し、audit log に記録する。
 - 任意 URL への投稿は禁止する。
-- `Sites.Selected` permission によって、付与対象 site 以外への Graph API アクセスは API レベルでも拒否される。
+- `Sites.Selected` のみを使用する場合、付与対象 site 以外への Graph API アクセスは API レベルで拒否される。`Sites.ReadWrite.All` フォールバック採用時はこの API レベルの拒否は機能しないため、アプリケーションレベルの制御と audit log を補完制御として必須とする。
 
 ## Required Follow-ups（M1）
 
