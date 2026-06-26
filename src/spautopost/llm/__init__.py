@@ -119,8 +119,13 @@ def build_llm_provider(config: LLMConfig, *, fixture: DraftOutput | None = None)
     """検証済み LLMConfig から provider を構築する。"""
     if config.provider == "test_mock":
         return MockLLMProvider(fixture=fixture, prompt_version=config.prompt_version)
+    if config.provider == "generic_api":
+        from .generic_provider import GenericApiLLMProvider
+
+        return GenericApiLLMProvider(config)
     raise LLMProviderConfigError(
-        f"llm provider {config.provider!r} is not supported; only 'test_mock' is implemented"
+        f"llm provider {config.provider!r} is not supported; "
+        "only 'test_mock' and 'generic_api' are implemented"
     )
 
 

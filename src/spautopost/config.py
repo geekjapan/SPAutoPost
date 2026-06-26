@@ -28,7 +28,18 @@ _SECTION_KEYS: dict[str, frozenset[str]] = {
     "app": frozenset({"environment", "dry_run", "log_level"}),
     "server": frozenset({"admin_ui_enabled", "admin_api_enabled", "auth_provider"}),
     "storage": frozenset({"provider", "database_url", "sqlite_path"}),
-    "llm": frozenset({"provider", "prompt_version"}),
+    "llm": frozenset(
+        {
+            "provider",
+            "prompt_version",
+            "endpoint_url",
+            "model",
+            "auth_env_var",
+            "timeout_seconds",
+            "max_retries",
+            "provider_name",
+        }
+    ),
     "sharepoint": frozenset(
         {
             "mode",
@@ -87,6 +98,12 @@ class SecurityConfig:
 class LLMConfig:
     provider: str
     prompt_version: str | None
+    endpoint_url: str | None = None
+    model: str | None = None
+    auth_env_var: str | None = None
+    timeout_seconds: int = 30
+    max_retries: int = 3
+    provider_name: str | None = None
 
 
 @dataclass(frozen=True)
@@ -185,6 +202,16 @@ def _bool(sec: Mapping[str, Any], key: str, default: bool, path: str, issues: li
     value = sec[key]
     if not isinstance(value, bool):
         issues.append(f"{path} must be a boolean")
+        return default
+    return value
+
+
+def _int(sec: Mapping[str, Any], key: str, default: int, path: str, issues: list[str]) -> int:
+    if key not in sec:
+        return default
+    value = sec[key]
+    if not isinstance(value, int) or isinstance(value, bool):
+        issues.append(f"{path} must be an integer")
         return default
     return value
 
@@ -301,9 +328,21 @@ def _validate_llm(raw: Mapping[str, Any], issues: list[str]) -> LLMConfig:
     if provider not in LLM_PROVIDERS:
         issues.append(f"llm.provider must be one of {sorted(LLM_PROVIDERS)}")
     prompt_version = _opt_str(sec, "prompt_version", "llm.prompt_version", issues)
+    endpoint_url = _opt_str(sec, "endpoint_url", "llm.endpoint_url", issues)
+    model = _opt_str(sec, "model", "llm.model", issues)
+    auth_env_var = _opt_str(sec, "auth_env_var", "llm.auth_env_var", issues)
+    provider_name = _opt_str(sec, "provider_name", "llm.provider_name", issues)
+    timeout_seconds = _int(sec, "timeout_seconds", 30, "llm.timeout_seconds", issues)
+    max_retries = _int(sec, "max_retries", 3, "llm.max_retries", issues)
     return LLMConfig(
         provider=provider if isinstance(provider, str) else "",
         prompt_version=prompt_version,
+        endpoint_url=endpoint_url,
+        model=model,
+        auth_env_var=auth_env_var,
+        timeout_seconds=timeout_seconds,
+        max_retries=max_retries,
+        provider_name=provider_name,
     )
 
 
