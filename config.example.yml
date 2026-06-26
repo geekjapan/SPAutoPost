@@ -46,6 +46,11 @@ sources:
 graph:
   local_poc_auth: delegated
   hosted_auth: managed_identity # user-assigned managed identity（#27 確定）
+  # device code flow 用 public client (application) id。機密ではないが env 参照も可。
+  client_id: env:SPAUTOPOST_GRAPH_CLIENT_ID
+  # 既定 scope は Sites.ReadWrite.All（未指定時に適用）。必要に応じて上書きする。
+  scopes:
+    - Sites.ReadWrite.All
 
 security:
   block_auto_publish: true

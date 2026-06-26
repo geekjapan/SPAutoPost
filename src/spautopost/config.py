@@ -42,7 +42,7 @@ _SECTION_KEYS: dict[str, frozenset[str]] = {
             "idempotency_scope",
         }
     ),
-    "graph": frozenset({"local_poc_auth", "hosted_auth"}),
+    "graph": frozenset({"local_poc_auth", "hosted_auth", "client_id", "scopes"}),
     "security": frozenset({"block_auto_publish", "require_approval", "redact_secrets_in_logs"}),
 }
 _FREEFORM_SECTIONS = frozenset({"sources"})
@@ -90,12 +90,27 @@ class LLMConfig:
 
 
 @dataclass(frozen=True)
+class GraphConfig:
+    """Microsoft Graph 認証設定（local PoC delegated 経路）。
+
+    ``client_id`` は public client の application id で機密ではない（env 参照も可）。
+    ``scopes`` 未指定時は空 tuple とし、auth provider 側で既定 scope を適用する。
+    """
+
+    local_poc_auth: str
+    hosted_auth: str
+    client_id: str | None
+    scopes: tuple[str, ...]
+
+
+@dataclass(frozen=True)
 class Config:
     app: AppConfig
     storage: StorageConfig
     sharepoint: SharePointConfig
     security: SecurityConfig
     llm: LLMConfig
+    graph: GraphConfig
     raw: Mapping[str, Any]
 
 
@@ -122,12 +137,19 @@ def validate_config(raw: Mapping[str, Any], environ: Mapping[str, str]) -> Confi
     sharepoint = _validate_sharepoint(raw, issues)
     security = _validate_security(raw, issues)
     llm = _validate_llm(raw, issues)
+    graph = _validate_graph(raw, issues)
     _validate_publish_consistency(sharepoint, security, issues)
     _validate_secret_refs(raw, environ, issues)
     if issues:
         raise ConfigValidationError(issues)
     return Config(
-        app=app, storage=storage, sharepoint=sharepoint, security=security, llm=llm, raw=raw
+        app=app,
+        storage=storage,
+        sharepoint=sharepoint,
+        security=security,
+        llm=llm,
+        graph=graph,
+        raw=raw,
     )
 
 
@@ -283,6 +305,30 @@ def _validate_llm(raw: Mapping[str, Any], issues: list[str]) -> LLMConfig:
         provider=provider if isinstance(provider, str) else "",
         prompt_version=prompt_version,
     )
+
+
+def _validate_graph(raw: Mapping[str, Any], issues: list[str]) -> GraphConfig:
+    sec = _section(raw, "graph")
+    local_poc_auth = _opt_str(sec, "local_poc_auth", "graph.local_poc_auth", issues) or "delegated"
+    hosted_auth = _opt_str(sec, "hosted_auth", "graph.hosted_auth", issues) or "undecided"
+    client_id = _opt_str(sec, "client_id", "graph.client_id", issues)
+    scopes = _validate_scopes(sec, issues)
+    return GraphConfig(
+        local_poc_auth=local_poc_auth,
+        hosted_auth=hosted_auth,
+        client_id=client_id,
+        scopes=scopes,
+    )
+
+
+def _validate_scopes(sec: Mapping[str, Any], issues: list[str]) -> tuple[str, ...]:
+    value = sec.get("scopes")
+    if value is None:
+        return ()
+    if not isinstance(value, list) or not all(isinstance(item, str) for item in value):
+        issues.append("graph.scopes must be a list of strings")
+        return ()
+    return tuple(value)
 
 
 def _validate_publish_consistency(
