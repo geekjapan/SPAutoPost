@@ -411,7 +411,17 @@ def test_pending_then_publishing_then_published(
     store: StoragePort, payload: dict[str, Any], metadata: ProviderMetadata
 ) -> None:
     """live publish は pending→publishing→published と遷移する。"""
-    states_observed: list[str] = []
+    states_at_acquire: list[str] = []
+    states_at_create: list[str] = []
+
+    class TrackingTokenProvider:
+        """acquire() の時点（pending 書き込み後・publishing 書き込み前）の状態を記録する。"""
+
+        def acquire(self) -> Any:
+            pubs = store.publications.list()
+            if pubs:
+                states_at_acquire.append(pubs[0].publication_status)
+            return FakeTokenProvider().acquire()
 
     class TrackingClient:
         def __init__(self) -> None:
@@ -422,9 +432,9 @@ def test_pending_then_publishing_then_published(
         def create_site_page(self, *, site_id: str, request_body: Any, access_token: str) -> Any:
             from spautopost.graph.sharepoint_client import CreatedPage
 
-            pub = store.publications.list()
-            if pub:
-                states_observed.append(pub[0].publication_status)
+            pubs = store.publications.list()
+            if pubs:
+                states_at_create.append(pubs[0].publication_status)
             self.create_calls.append({"site_id": site_id})
             return CreatedPage(page_id="page-tracking")
 
@@ -441,14 +451,17 @@ def test_pending_then_publishing_then_published(
         payload,
         dry_run=False,
         store=store,
-        token_provider=FakeTokenProvider(),
+        token_provider=TrackingTokenProvider(),
         client=client,
         **_common(payload, metadata),
     )
 
     assert result.publication.publication_status == "published"
-    # API 呼び出し時点で pending か publishing であるべき（pending→publishing 遷移を経る）。
-    assert states_observed and states_observed[0] in ("pending", "publishing")
+    # acquire() 時点（pending 後・publishing 前）で pending が記録されていること。
+    # acquire() 時点（pending 後・publishing 前）で pending が記録されていること。
+    assert states_at_acquire == ["pending"], f"got {states_at_acquire}"
+    # create_site_page 時点（publishing 後）で publishing が記録されていること。
+    assert states_at_create == ["publishing"], f"got {states_at_create}"
 
 
 def test_retry_with_existing_page_id_calls_update(

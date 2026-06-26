@@ -303,7 +303,7 @@ def publish_site_page(
             final_page_id = update_page_id
             audits = [
                 _build_audit(
-                    event_type="publish_create",
+                    event_type="publish_update",
                     result="success",
                     correlation_id=correlation_id,
                     audit_event_id=id_factory(),
