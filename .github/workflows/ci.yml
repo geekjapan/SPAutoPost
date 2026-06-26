@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: read
+  pull-requests: read  # required by gitleaks-action@v2 in PR mode
 
 concurrency:
   group: ci-${{ github.ref }}
