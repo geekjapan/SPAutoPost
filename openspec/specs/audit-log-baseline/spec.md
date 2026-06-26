@@ -1,7 +1,7 @@
 # audit-log-baseline Specification
 
 ## Purpose
-TBD - created by archiving change issue-5-security-secrets-audit-baseline. Update Purpose after archive.
+この Spec は、SPAutoPost の監査イベント要件、必須項目、許容 event_type、機微情報のログ禁止、correlation_id 追跡、および失敗・レビュー監査要件を定義します。
 ## Requirements
 ### Requirement: 監査イベントに必須項目を記録する
 システムは、すべての監査イベントに `audit_event_id`・`event_type`・`correlation_id`・`result`・`created_at` を含めなければならない（SHALL）。

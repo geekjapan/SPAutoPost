@@ -1,7 +1,7 @@
 # security-baseline Specification
 
 ## Purpose
-TBD - created by archiving change issue-5-security-secrets-audit-baseline. Update Purpose after archive.
+この Spec は、SPAutoPost の Secret 管理禁止事項・Microsoft Graph 権限最小化・LLM 入力制限・AI 出力安全性・投稿先固定・重複投稿防止・自動公開抑制の要件を定義します。
 ## Requirements
 ### Requirement: Secret を保存・出力してはならない
 システムは、API key・access token・refresh token・client secret・certificate private key・cookie・authorization header をソースコード・設定ファイル・テストフィクスチャ・ログ・例外メッセージに含めてはならない（SHALL NOT）。

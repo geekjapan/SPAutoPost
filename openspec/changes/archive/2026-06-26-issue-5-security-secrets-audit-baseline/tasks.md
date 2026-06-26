@@ -7,8 +7,8 @@
 
 ## 2. OpenSpec capability specs の作成
 
-- [ ] 2.1 `openspec/specs/security-baseline/spec.md` を作成し、change の specs から内容をアーカイブする（`opsx:archive` 実行）
-- [ ] 2.2 `openspec/specs/audit-log-baseline/spec.md` を作成し、change の specs から内容をアーカイブする（`opsx:archive` 実行）
+- [x] 2.1 `openspec/specs/security-baseline/spec.md` を作成し、change の specs から内容をアーカイブする（`opsx:archive` 実行）
+- [x] 2.2 `openspec/specs/audit-log-baseline/spec.md` を作成し、change の specs から内容をアーカイブする（`opsx:archive` 実行）
 
 ## 3. 検証
 
@@ -18,5 +18,5 @@
 
 ## 4. PR 作成
 
-- [ ] 4.1 変更ファイルをステージし、`docs: define security and audit baseline (Issue #5)` でコミットする
-- [ ] 4.2 base: main で PR を作成し、受け入れ条件の充足を PR 説明に記載する
+- [x] 4.1 変更ファイルをステージし、`docs: define security and audit baseline (Issue #5)` でコミットする
+- [x] 4.2 base: main で PR を作成し、受け入れ条件の充足を PR 説明に記載する
