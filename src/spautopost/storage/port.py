@@ -18,6 +18,7 @@ from typing import Protocol, runtime_checkable
 
 from .models import (
     AdminCommand,
+    AdminCommandType,
     Advisory,
     AuditEvent,
     DraftPost,
@@ -127,8 +128,16 @@ class AdminCommandRepository(Protocol):
 
     def get(self, command_id: str) -> AdminCommand | None: ...
 
-    def claim_pending(self, *, limit: int = DEFAULT_LIST_LIMIT) -> Sequence[AdminCommand]:
-        """pending command を排他的に claim して processing として返す。"""
+    def claim_pending(
+        self,
+        *,
+        command_type: AdminCommandType | None = None,
+        limit: int = DEFAULT_LIST_LIMIT,
+    ) -> Sequence[AdminCommand]:
+        """pending command を排他的に claim して processing として返す。
+
+        command_type を指定すると、そのタイプのコマンドのみを claim する。
+        """
         ...
 
     def complete(self, command_id: str) -> None: ...

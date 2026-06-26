@@ -6,9 +6,9 @@ import pytest
 
 from spautopost import job_entrypoint
 from spautopost.job_entrypoint import (
-    EXIT_PUBLISH_GATED,
     EXIT_UNKNOWN_JOB,
     JOB_COMMANDS,
+    PUBLISH_JOB,
     main,
 )
 
@@ -42,21 +42,27 @@ def test_collect_and_generate_force_dry_run(job: str) -> None:
 
 
 @pytest.mark.unit
-def test_publish_approved_never_publishes(
-    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
-) -> None:
-    # Arrange: CLI が呼ばれたら失敗させ、publish 経路に落ちないことを保証する。
-    def boom(argv: list[str]) -> int:  # pragma: no cover - 呼ばれてはいけない
-        raise AssertionError("publish-approved must not invoke the CLI")
+def test_publish_approved_routes_to_cli(monkeypatch: pytest.MonkeyPatch) -> None:
+    # publish-approved は AdminCommand ゲートを経由して CLI に委譲される。
+    captured: dict[str, list[str]] = {}
 
-    monkeypatch.setattr(job_entrypoint, "cli_main", boom)
+    def fake_cli(argv: list[str]) -> int:
+        captured["argv"] = argv
+        return 0
 
-    # Act
-    code = main(["publish-approved"])
+    monkeypatch.setattr(job_entrypoint, "cli_main", fake_cli)
 
-    # Assert
-    assert code == EXIT_PUBLISH_GATED
-    assert "human-gated" in capsys.readouterr().err
+    code = main([PUBLISH_JOB])
+
+    assert code == 0
+    assert captured["argv"] == JOB_COMMANDS[PUBLISH_JOB]
+
+
+@pytest.mark.unit
+def test_publish_approved_job_command_does_not_force_dry_run() -> None:
+    # publish-approved は --dry-run を強制しない（config の allow_publish に委ねる）。
+    assert "--dry-run" not in JOB_COMMANDS[PUBLISH_JOB]
+    assert "publish-approved" in JOB_COMMANDS[PUBLISH_JOB]
 
 
 @pytest.mark.unit

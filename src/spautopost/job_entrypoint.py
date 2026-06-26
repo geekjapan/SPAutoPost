@@ -7,9 +7,10 @@ in-process via :func:`spautopost.cli.main`.
 Safety policy (M1):
 
 - Hosted jobs run dry-run by default; publishing is always human-gated.
-- ``publish-approved`` is a guarded stub: it never publishes and never calls any
-  external SharePoint / Graph API. It returns :data:`EXIT_PUBLISH_GATED` so the
-  no-op is unmistakable until an approved publish path lands.
+- ``publish-approved`` processes pending ``publish_request`` AdminCommands.
+  Real Graph API calls require ``allow_publish=true`` in config AND
+  ``SPAUTOPOST_GRAPH_ACCESS_TOKEN`` in the environment. Without a valid
+  token the job exits with a runtime error (no commands are claimed).
 
 Design / spec: openspec/changes/issue-25-add-azure-container-apps-deployment-skeleton/
 """
@@ -22,40 +23,34 @@ from collections.abc import Sequence
 from .cli import main as cli_main
 
 EXIT_UNKNOWN_JOB = 2
-EXIT_PUBLISH_GATED = 4
 
 PUBLISH_JOB = "publish-approved"
 
 # job name -> spautopost CLI argv. dry-run is forced where the path is safe.
-# NOTE: collect and generate resolve to the same sample-source pipeline in M1
-# (the Python core does collect+generate in one pass). Split into distinct CLI
-# commands when separate collect/generate paths actually exist.
+# NOTE: collect and generate resolve to the same sample-source pipeline in M1.
 JOB_COMMANDS: dict[str, list[str]] = {
     "dry-run": ["--dry-run", "validate-config"],
     "collect": ["--dry-run", "run-sample-source-job"],
     "generate": ["--dry-run", "run-sample-source-job"],
+    # publish-approved: human-gated publish flow.
+    # Requires allow_publish=true in config AND SPAUTOPOST_GRAPH_ACCESS_TOKEN.
+    PUBLISH_JOB: ["publish-approved"],
 }
 
-AVAILABLE_JOBS: tuple[str, ...] = (*JOB_COMMANDS, PUBLISH_JOB)
+AVAILABLE_JOBS: tuple[str, ...] = tuple(JOB_COMMANDS)
 
 
 def resolve_job(job: str) -> list[str]:
     """Return the spautopost CLI argv for a job name.
 
     Raises:
-        KeyError: if the job name is not a known non-publishing job.
+        KeyError: if the job name is not a known job.
     """
     return list(JOB_COMMANDS[job])
 
 
 def run_job(job: str) -> int:
     """Run a single named job and return its process exit code."""
-    if job == PUBLISH_JOB:
-        print(
-            "publish-approved is human-gated and not implemented in M1; no publish performed.",
-            file=sys.stderr,
-        )
-        return EXIT_PUBLISH_GATED
     try:
         argv = resolve_job(job)
     except KeyError:

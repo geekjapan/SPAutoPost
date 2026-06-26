@@ -102,6 +102,10 @@ def build_parser() -> argparse.ArgumentParser:
         "run-sample-source-job",
         help="sample source から Advisory と DraftPost を生成して保存する",
     )
+    sub.add_parser(
+        "publish-approved",
+        help="pending な publish_request AdminCommand を処理し、approved DraftPost を投稿する",
+    )
     return parser
 
 
@@ -145,6 +149,8 @@ def _dispatch(args: argparse.Namespace, config: Config, dry_run: bool) -> int:
         return _run_preview_draft(args.input_file, config)
     if command == "run-sample-source-job":
         return _run_sample_source_job(config, dry_run)
+    if command == "publish-approved":
+        return _run_publish_approved(config, dry_run)
     print(f"unknown command: {command}", file=sys.stderr)  # pragma: no cover
     return EXIT_RUNTIME_ERROR  # pragma: no cover
 
@@ -343,6 +349,152 @@ def _run_sample_source_job(config: Config, dry_run: bool) -> int:
         }
     )
     return EXIT_OK
+
+
+def _run_publish_approved(config: Config, dry_run: bool) -> int:
+    """pending な publish_request AdminCommand を処理し、approved DraftPost を投稿する。
+
+    dry_run=True または config.sharepoint.allow_publish=False の場合は実投稿しない。
+    投稿操作は人間が Admin UI/API で publish_request コマンドを発行した後にのみ実行される。
+    """
+    from .errors import GraphAuthError, PublishError
+    from .secrets import is_secret_ref, secret_env_name
+    from .sharepoint_publisher import (
+        MicrosoftGraphClient,
+        NoopGraphClient,
+        publish_approved_draft,
+    )
+    from .storage.errors import StorageError
+    from .storage.factory import build_storage
+
+    effective_dry_run = dry_run or not config.sharepoint.allow_publish
+
+    # Resolve env: references for SharePoint target identifiers at the publish boundary.
+    def _resolve(value: str | None) -> str:
+        if value and is_secret_ref(value):
+            return os.environ.get(secret_env_name(value), "")
+        return value or ""
+
+    target_site_id = _resolve(config.sharepoint.site_id)
+    target_page_library_id = _resolve(config.sharepoint.page_library_id)
+
+    # Validate Graph auth before claiming commands so that a missing token
+    # does not leave publish_request rows stuck in processing state.
+    if effective_dry_run:
+        graph: object = NoopGraphClient()
+    else:
+        try:
+            graph = MicrosoftGraphClient.from_env()
+        except GraphAuthError as exc:
+            print(f"Graph auth error: {exc}", file=sys.stderr)
+            return EXIT_RUNTIME_ERROR
+
+    try:
+        storage = build_storage(config.storage)
+    except StorageError as exc:
+        print(f"storage init failed: {exc}", file=sys.stderr)
+        return EXIT_RUNTIME_ERROR
+
+    try:
+        storage.migrate()
+        # Claim only publish_request commands so other command types are never blocked.
+        publish_commands = storage.admin_commands.claim_pending(command_type="publish_request")
+
+        if not publish_commands:
+            print(
+                json.dumps(
+                    {
+                        "dry_run": effective_dry_run,
+                        "processed": 0,
+                        "reason": "no pending publish_request commands",
+                    },
+                    ensure_ascii=False,
+                )
+            )
+            return EXIT_OK
+
+        results: list[dict[str, Any]] = []
+        for cmd in publish_commands:
+            draft_id = cmd.target_draft_id
+            if not draft_id:
+                storage.admin_commands.fail(
+                    cmd.command_id,
+                    error_code="missing_target_draft_id",
+                    error_message="publish_request command has no target_draft_id",
+                )
+                results.append(
+                    {
+                        "command_id": cmd.command_id,
+                        "status": "failed",
+                        "reason": "missing_target_draft_id",
+                    }
+                )
+                continue
+
+            draft = storage.draft_posts.get(draft_id)
+            if draft is None:
+                storage.admin_commands.fail(
+                    cmd.command_id,
+                    error_code="draft_not_found",
+                    error_message=f"DraftPost {draft_id!r} not found",
+                )
+                results.append(
+                    {
+                        "command_id": cmd.command_id,
+                        "draft_id": draft_id,
+                        "status": "failed",
+                        "reason": "draft_not_found",
+                    }
+                )
+                continue
+
+            try:
+                result = publish_approved_draft(
+                    draft=draft,
+                    storage=storage,
+                    graph=graph,  # type: ignore[arg-type]
+                    target_site_id=target_site_id,
+                    target_page_library_id=target_page_library_id,
+                    actor=cmd.requested_by or "system",
+                    dry_run=effective_dry_run,
+                    correlation_id=cmd.correlation_id or uuid.uuid4().hex,
+                )
+                storage.admin_commands.complete(cmd.command_id)
+                results.append(
+                    {
+                        "command_id": cmd.command_id,
+                        "draft_id": draft_id,
+                        "status": "published" if not effective_dry_run else "dry_run",
+                        "publication_id": result.publication.publication_id,
+                        "created": result.created,
+                    }
+                )
+            except Exception as exc:
+                error_code = "publish_error" if isinstance(exc, PublishError) else "system_error"
+                storage.admin_commands.fail(
+                    cmd.command_id,
+                    error_code=error_code,
+                    error_message=str(exc)[:500],
+                )
+                results.append(
+                    {
+                        "command_id": cmd.command_id,
+                        "draft_id": draft_id,
+                        "status": "failed",
+                        "reason": str(exc)[:200],
+                    }
+                )
+
+        _print_preview(
+            {"dry_run": effective_dry_run, "processed": len(results), "results": results}
+        )
+        return EXIT_OK
+
+    except StorageError as exc:
+        print(f"publish-approved failed: {exc}", file=sys.stderr)
+        return EXIT_RUNTIME_ERROR
+    finally:
+        storage.close()
 
 
 def _apply_migrations(storage: object) -> list[str]:
