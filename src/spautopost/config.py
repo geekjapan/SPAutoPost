@@ -32,6 +32,7 @@ _SECTION_KEYS: dict[str, frozenset[str]] = {
         {
             "provider",
             "prompt_version",
+            "azure",
             "endpoint_url",
             "model",
             "auth_env_var",
@@ -95,6 +96,26 @@ class SecurityConfig:
     redact_secrets_in_logs: bool
 
 
+_AZURE_AUTH_TYPES = frozenset({"api_key", "managed_identity"})
+_AZURE_DEFAULT_API_VERSION = "2024-02-01"
+_AZURE_DEFAULT_TIMEOUT_SECS = 60
+_AZURE_DEFAULT_MAX_RETRIES = 3
+
+
+@dataclass(frozen=True)
+class AzureOpenAIConfig:
+    """Azure OpenAI / Foundry provider の設定。"""
+
+    endpoint: str
+    deployment: str
+    api_version: str
+    auth_type: str
+    api_key_ref: str | None
+    timeout_secs: int
+    max_retries: int
+    production_approved: bool
+
+
 @dataclass(frozen=True)
 class LLMConfig:
     provider: str
@@ -106,6 +127,7 @@ class LLMConfig:
     max_retries: int = 3
     provider_name: str | None = None
     production_approved: bool = False
+    azure: AzureOpenAIConfig | None = None
 
 
 @dataclass(frozen=True)
@@ -343,8 +365,13 @@ def _validate_llm(raw: Mapping[str, Any], issues: list[str]) -> LLMConfig:
     production_approved = _bool(
         sec, "production_approved", False, "llm.production_approved", issues
     )
-    _PRODUCTION_PROVIDERS = frozenset({"production_api", "production_flow", "generic_api"})
-    if provider in _PRODUCTION_PROVIDERS and not production_approved:
+    azure = _validate_azure_llm(sec, str(provider) if isinstance(provider, str) else "", issues)
+    # 本番系 provider は情報セキュリティ部門の承認を必須とする。承認はフラットな
+    # llm.production_approved、または production_api では llm.azure.production_approved の
+    # いずれかで満たせる（azure provider は build 時に承認を独立して再強制する）。
+    azure_approved = azure is not None and azure.production_approved
+    production_providers = frozenset({"production_api", "production_flow", "generic_api"})
+    if provider in production_providers and not (production_approved or azure_approved):
         issues.append(
             f"llm.production_approved must be true to use provider={provider!r}; "
             "obtain information-security department approval first "
@@ -359,6 +386,78 @@ def _validate_llm(raw: Mapping[str, Any], issues: list[str]) -> LLMConfig:
         timeout_seconds=timeout_seconds,
         max_retries=max_retries,
         provider_name=provider_name,
+        production_approved=production_approved,
+        azure=azure,
+    )
+
+
+def _validate_azure_llm(
+    llm_sec: Mapping[str, Any], provider: str, issues: list[str]
+) -> AzureOpenAIConfig | None:
+    azure_raw = llm_sec.get("azure")
+    if provider == "production_api":
+        if azure_raw is None:
+            issues.append("llm.azure is required when llm.provider is 'production_api'")
+            return None
+        if not isinstance(azure_raw, Mapping):
+            issues.append("llm.azure must be a mapping")
+            return None
+    else:
+        if not isinstance(azure_raw, Mapping):
+            return None
+    sec = dict(azure_raw)
+    endpoint = _opt_str(sec, "endpoint", "llm.azure.endpoint", issues) or ""
+    deployment = _opt_str(sec, "deployment", "llm.azure.deployment", issues) or ""
+    if provider == "production_api":
+        if not endpoint:
+            issues.append("llm.azure.endpoint is required when llm.provider is 'production_api'")
+        if not deployment:
+            issues.append("llm.azure.deployment is required when llm.provider is 'production_api'")
+    api_version = (
+        _opt_str(sec, "api_version", "llm.azure.api_version", issues) or _AZURE_DEFAULT_API_VERSION
+    )
+    auth_type = _opt_str(sec, "auth_type", "llm.azure.auth_type", issues) or "api_key"
+    if auth_type not in _AZURE_AUTH_TYPES:
+        issues.append(f"llm.azure.auth_type must be one of {sorted(_AZURE_AUTH_TYPES)}")
+        auth_type = "api_key"
+    api_key_ref = _opt_str(sec, "api_key", "llm.azure.api_key", issues)
+    if provider == "production_api" and auth_type == "api_key":
+        if not api_key_ref:
+            issues.append(
+                "llm.azure.api_key is required when llm.provider is 'production_api'"
+                " and auth_type is 'api_key'"
+            )
+        elif not api_key_ref.startswith("env:"):
+            issues.append(
+                "llm.azure.api_key must be an env: reference (e.g. env:AZURE_OPENAI_API_KEY);"
+                " plaintext secrets are not allowed"
+            )
+    timeout_secs_raw = sec.get("timeout_secs", _AZURE_DEFAULT_TIMEOUT_SECS)
+    timeout_secs = _AZURE_DEFAULT_TIMEOUT_SECS
+    if isinstance(timeout_secs_raw, int):
+        timeout_secs = timeout_secs_raw
+    elif timeout_secs_raw is not None:
+        issues.append("llm.azure.timeout_secs must be an integer")
+    max_retries_raw = sec.get("max_retries", _AZURE_DEFAULT_MAX_RETRIES)
+    max_retries = _AZURE_DEFAULT_MAX_RETRIES
+    if isinstance(max_retries_raw, int):
+        if max_retries_raw < 0:
+            issues.append("llm.azure.max_retries must be >= 0")
+        else:
+            max_retries = max_retries_raw
+    elif max_retries_raw is not None:
+        issues.append("llm.azure.max_retries must be an integer")
+    production_approved = _bool(
+        sec, "production_approved", False, "llm.azure.production_approved", issues
+    )
+    return AzureOpenAIConfig(
+        endpoint=endpoint,
+        deployment=deployment,
+        api_version=api_version,
+        auth_type=auth_type,
+        api_key_ref=api_key_ref,
+        timeout_secs=timeout_secs,
+        max_retries=max_retries,
         production_approved=production_approved,
     )
 

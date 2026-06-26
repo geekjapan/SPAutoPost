@@ -22,6 +22,17 @@ class LLMProviderConfigError(ValueError):
     """LLM provider 設定または構築の失敗。Secret 値は含めない。"""
 
 
+class LLMProviderError(RuntimeError):
+    """LLM provider 呼び出しの失敗。Secret 値は含めない。
+
+    ``is_retryable`` が True の場合、上位でリトライ可能であることを示す。
+    """
+
+    def __init__(self, message: str, *, is_retryable: bool) -> None:
+        super().__init__(message)
+        self.is_retryable = is_retryable
+
+
 @dataclass(frozen=True)
 class DraftInput:
     """LLM provider に渡す掲示板原稿生成入力。"""
@@ -119,13 +130,21 @@ def build_llm_provider(config: LLMConfig, *, fixture: DraftOutput | None = None)
     """検証済み LLMConfig から provider を構築する。"""
     if config.provider == "test_mock":
         return MockLLMProvider(fixture=fixture, prompt_version=config.prompt_version)
+    if config.provider == "production_api":
+        from .azure_openai import AzureOpenAIProvider
+
+        if config.azure is None:
+            raise LLMProviderConfigError(
+                "llm.azure config is required when provider=production_api"
+            )
+        return AzureOpenAIProvider(config.azure, prompt_version=config.prompt_version)
     if config.provider == "generic_api":
         from .generic_provider import GenericApiLLMProvider
 
         return GenericApiLLMProvider(config)
     raise LLMProviderConfigError(
         f"llm provider {config.provider!r} is not supported; "
-        "only 'test_mock' and 'generic_api' are implemented"
+        "only 'test_mock', 'production_api' and 'generic_api' are implemented"
     )
 
 
@@ -134,6 +153,7 @@ __all__ = [
     "DraftOutput",
     "LLMProvider",
     "LLMProviderConfigError",
+    "LLMProviderError",
     "MockLLMProvider",
     "ProviderMetadata",
     "ProviderStatus",

@@ -111,9 +111,18 @@ def test_unknown_provider_is_rejected() -> None:
 @pytest.mark.parametrize("provider", ["test_mock", "test_manual"])
 def test_llm_provider_types_are_supported_without_gate(provider: str) -> None:
     raw = _base_config()
-    raw["llm"] = {"provider": provider}
+    llm_section: dict[str, object] = {"provider": provider}
+    environ = _environ()
+    if provider == "production_api":
+        llm_section["azure"] = {
+            "endpoint": "https://example.openai.azure.com",
+            "deployment": "gpt-4o",
+            "api_key": "env:AZURE_OPENAI_API_KEY",
+        }
+        environ = {**environ, "AZURE_OPENAI_API_KEY": "dummy-key"}
+    raw["llm"] = llm_section
 
-    config = validate_config(raw, _environ())
+    config = validate_config(raw, environ)
 
     assert config.llm.provider == provider
 
@@ -132,9 +141,19 @@ def test_production_providers_require_production_approved(provider: str) -> None
 @pytest.mark.parametrize("provider", ["production_api", "production_flow", "generic_api"])
 def test_production_providers_accepted_when_production_approved_true(provider: str) -> None:
     raw = _base_config()
-    raw["llm"] = {"provider": provider, "production_approved": True}
+    llm_section: dict[str, object] = {"provider": provider, "production_approved": True}
+    environ = _environ()
+    if provider == "production_api":
+        # production_api は llm.azure サブセクション（endpoint/deployment/api_key）が必須。
+        llm_section["azure"] = {
+            "endpoint": "https://example.openai.azure.com",
+            "deployment": "gpt-4o",
+            "api_key": "env:AZURE_OPENAI_API_KEY",
+        }
+        environ = {**environ, "AZURE_OPENAI_API_KEY": "dummy-key"}
+    raw["llm"] = llm_section
 
-    config = validate_config(raw, _environ())
+    config = validate_config(raw, environ)
 
     assert config.llm.provider == provider
     assert config.llm.production_approved is True
