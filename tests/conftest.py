@@ -28,6 +28,9 @@ sharepoint:
   tenant_id: env:SPAUTOPOST_TENANT_ID
   site_id: env:SPAUTOPOST_SHAREPOINT_SITE_ID
   page_library_id: env:SPAUTOPOST_SHAREPOINT_PAGE_LIBRARY_ID
+  dedicated_site: true
+  news_promote: false
+  idempotency_scope: site-and-page-library
 
 security:
   block_auto_publish: true

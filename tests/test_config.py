@@ -21,6 +21,9 @@ def _base_config() -> dict[str, object]:
             "tenant_id": "env:T",
             "site_id": "env:S",
             "page_library_id": "env:L",
+            "dedicated_site": True,
+            "news_promote": False,
+            "idempotency_scope": "site-and-page-library",
         },
         "security": {"require_approval": True},
     }

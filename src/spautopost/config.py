@@ -21,7 +21,8 @@ STORAGE_PROVIDERS = frozenset({"postgresql", "sqlite"})
 LLM_PROVIDERS = frozenset(
     {"production_api", "production_flow", "generic_api", "test_mock", "test_manual"}
 )
-SHAREPOINT_MODES = frozenset({"site-page", "list"})
+SHAREPOINT_MODES = frozenset({"site-page"})
+IDEMPOTENCY_SCOPES = frozenset({"site-and-page-library"})
 
 _SECTION_KEYS: dict[str, frozenset[str]] = {
     "app": frozenset({"environment", "dry_run", "log_level"}),
@@ -29,7 +30,17 @@ _SECTION_KEYS: dict[str, frozenset[str]] = {
     "storage": frozenset({"provider", "database_url", "sqlite_path"}),
     "llm": frozenset({"provider", "prompt_version"}),
     "sharepoint": frozenset(
-        {"mode", "default_draft", "allow_publish", "tenant_id", "site_id", "page_library_id"}
+        {
+            "mode",
+            "default_draft",
+            "allow_publish",
+            "tenant_id",
+            "site_id",
+            "page_library_id",
+            "dedicated_site",
+            "news_promote",
+            "idempotency_scope",
+        }
     ),
     "graph": frozenset({"local_poc_auth", "hosted_auth"}),
     "security": frozenset({"block_auto_publish", "require_approval", "redact_secrets_in_logs"}),
@@ -60,6 +71,9 @@ class SharePointConfig:
     tenant_id: str | None
     site_id: str | None
     page_library_id: str | None
+    dedicated_site: bool
+    news_promote: bool
+    idempotency_scope: str | None
 
 
 @dataclass(frozen=True)
@@ -222,6 +236,17 @@ def _validate_sharepoint(raw: Mapping[str, Any], issues: list[str]) -> SharePoin
     for name, value in targets.items():
         if not value:
             issues.append(f"sharepoint.{name} is required")
+    dedicated_site = _bool(sec, "dedicated_site", True, "sharepoint.dedicated_site", issues)
+    if not dedicated_site:
+        issues.append("sharepoint.dedicated_site must be true (M1 requires dedicated site only)")
+    news_promote = _bool(sec, "news_promote", False, "sharepoint.news_promote", issues)
+    if news_promote:
+        issues.append("sharepoint.news_promote must be false (M1 does not implement News promote)")
+    idempotency_scope = _opt_str(sec, "idempotency_scope", "sharepoint.idempotency_scope", issues)
+    if not idempotency_scope:
+        issues.append("sharepoint.idempotency_scope is required")
+    elif idempotency_scope not in IDEMPOTENCY_SCOPES:
+        issues.append(f"sharepoint.idempotency_scope must be one of {sorted(IDEMPOTENCY_SCOPES)}")
     return SharePointConfig(
         mode=mode if isinstance(mode, str) else "",
         default_draft=default_draft,
@@ -229,6 +254,9 @@ def _validate_sharepoint(raw: Mapping[str, Any], issues: list[str]) -> SharePoin
         tenant_id=targets["tenant_id"],
         site_id=targets["site_id"],
         page_library_id=targets["page_library_id"],
+        dedicated_site=dedicated_site,
+        news_promote=news_promote,
+        idempotency_scope=idempotency_scope,
     )
 
 
