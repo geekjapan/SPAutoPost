@@ -152,7 +152,9 @@ def test_fetch_returns_source_document(adapter_with_key: FirecrawlSourceAdapter)
 
 
 def test_fetch_uses_status_code_from_metadata(adapter_with_key: FirecrawlSourceAdapter) -> None:
-    mock_result = _make_mock_result(metadata={"title": "Test", "sourceURL": SAMPLE_URL, "statusCode": 404})
+    mock_result = _make_mock_result(
+        metadata={"title": "Test", "sourceURL": SAMPLE_URL, "statusCode": 404}
+    )
     mock_firecrawl = MagicMock()
     mock_firecrawl.V1FirecrawlApp.return_value.scrape_url.return_value = mock_result
 
@@ -162,7 +164,9 @@ def test_fetch_uses_status_code_from_metadata(adapter_with_key: FirecrawlSourceA
     assert documents[0].source_record.http_status == 404
 
 
-def test_fetch_defaults_http_status_to_200_when_missing(adapter_with_key: FirecrawlSourceAdapter) -> None:
+def test_fetch_defaults_http_status_to_200_when_missing(
+    adapter_with_key: FirecrawlSourceAdapter,
+) -> None:
     mock_result = _make_mock_result(metadata={"title": "Test", "sourceURL": SAMPLE_URL})
     mock_firecrawl = MagicMock()
     mock_firecrawl.V1FirecrawlApp.return_value.scrape_url.return_value = mock_result
