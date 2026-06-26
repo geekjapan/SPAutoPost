@@ -66,4 +66,11 @@ class CollectionCheckpointStore:
                 pass
         data[checkpoint.source_name] = checkpoint.last_collected_at.isoformat()
         self._path.parent.mkdir(parents=True, exist_ok=True)
-        self._path.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
+        temp_path = self._path.with_suffix(".tmp")
+        try:
+            temp_path.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
+            temp_path.replace(self._path)
+        except Exception:
+            if temp_path.exists():
+                temp_path.unlink()
+            raise

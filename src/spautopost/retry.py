@@ -44,16 +44,14 @@ def with_retry[T](fn: Callable[[], T], config: RetryConfig | None = None) -> T:
     全試行が失敗した場合は最後の例外を再発生させる。
     """
     cfg = config or RetryConfig()
-    last_exc: BaseException | None = None
     delay = cfg.base_delay_seconds
 
     for attempt in range(cfg.max_attempts):
         try:
             return fn()
-        except Exception as exc:
-            last_exc = exc
+        except Exception:
             if attempt < cfg.max_attempts - 1:
                 cfg.sleep_fn(delay)
                 delay = min(delay * cfg.backoff_factor, cfg.max_delay_seconds)
-
-    raise last_exc  # type: ignore[misc]
+            else:
+                raise

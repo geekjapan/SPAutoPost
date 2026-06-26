@@ -169,7 +169,7 @@ def _validate_advisory(raw: Mapping[str, object], index: int) -> list[str]:
             if not _nonempty_str(ref.get("label")):
                 issues.append(f"advisories[{index}].references[{ri}].label は必須です")
             url = ref.get("url")
-            if not isinstance(url, str) or not _valid_url(url):
+            if not isinstance(url, str) or not _valid_url(url.strip()):
                 issues.append(
                     f"advisories[{index}].references[{ri}].url は http(s) URL である必要があります"
                 )

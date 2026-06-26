@@ -59,8 +59,11 @@ def run_job(job: str) -> int:
         _print_usage(f"unknown job: {job}")
         return EXIT_UNKNOWN_JOB
     context = build_job_context(job)
-    current_job_context.set(context)
-    return cli_main(argv)
+    token = current_job_context.set(context)
+    try:
+        return cli_main(argv)
+    finally:
+        current_job_context.reset(token)
 
 
 def get_job_context(job: str) -> JobContext:
