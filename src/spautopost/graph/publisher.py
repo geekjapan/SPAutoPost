@@ -240,6 +240,7 @@ def publish_site_page(
     if token_provider is None or client is None:
         raise GraphAuthError("live publish requires a token_provider and a pages client")
 
+    created_page_id: str | None = None
     try:
         auth = token_provider.acquire()
         request_body = build_create_page_request(page_payload)
@@ -248,6 +249,7 @@ def publish_site_page(
             request_body=request_body,
             access_token=auth.access_token,
         )
+        created_page_id = created_page.page_id
         actor = auth.identity.user_principal_name
         audits = [
             _build_audit(
@@ -323,6 +325,7 @@ def publish_site_page(
             status="failed",
             operation="create",
             now=now,
+            sharepoint_page_id=created_page_id,
             error_code=error_code,
             error_message=error_message,
             retryable=retryable,
@@ -336,6 +339,7 @@ def publish_site_page(
             operation="create",
             target_site_id=target_site_id,
             target_page_library_id=target_page_library_id,
+            sharepoint_page_id=created_page_id,
             service_principal=client_id,
             provider=provider,
             advisory_id=advisory_id,
@@ -349,5 +353,8 @@ def publish_site_page(
         except Exception:  # noqa: BLE001
             stored = publication
         return PublishResult(
-            publication=stored, audit_events=(audit,), dry_run=False, created=False
+            publication=stored,
+            audit_events=(audit,),
+            dry_run=False,
+            created=created_page_id is not None,
         )

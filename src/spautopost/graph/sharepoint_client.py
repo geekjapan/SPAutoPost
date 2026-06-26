@@ -57,24 +57,32 @@ def _sections_to_html(sections: Sequence[Mapping[str, Any]]) -> str:
     """dry-run の sections 構造を Site Page 本文 HTML に変換する（純関数）。"""
     blocks: list[str] = []
     for section in sections:
+        if not isinstance(section, Mapping):
+            continue
         heading = html.escape(str(section.get("heading", "")))
         blocks.append(f"<h2>{heading}</h2>")
         if "body" in section:
             blocks.append(f"<p>{html.escape(str(section['body']))}</p>")
         if "items" in section:
-            items = "".join(f"<li>{html.escape(str(item))}</li>" for item in section["items"])
-            blocks.append(f"<ul>{items}</ul>")
+            items_seq = section["items"]
+            if isinstance(items_seq, Sequence) and not isinstance(items_seq, str):
+                items = "".join(f"<li>{html.escape(str(item))}</li>" for item in items_seq)
+                blocks.append(f"<ul>{items}</ul>")
         if "references" in section:
-            refs = []
-            for ref in section["references"]:
-                label = html.escape(str(ref.get("label", ref.get("url", ""))))
-                url_str = str(ref.get("url", ""))
-                # javascript: などの非 http(s) スキームを排除する（XSS 防止）。
-                if not url_str.startswith(("https://", "http://")):
-                    url_str = ""
-                url = html.escape(url_str)
-                refs.append(f'<li><a href="{url}">{label}</a></li>')
-            blocks.append(f"<ul>{''.join(refs)}</ul>")
+            refs_seq = section["references"]
+            if isinstance(refs_seq, Sequence) and not isinstance(refs_seq, str):
+                refs = []
+                for ref in refs_seq:
+                    if not isinstance(ref, Mapping):
+                        continue
+                    label = html.escape(str(ref.get("label", ref.get("url", ""))))
+                    url_str = str(ref.get("url", "")).strip()
+                    # javascript: などの非 http(s) スキームを排除する（XSS 防止）。
+                    if not url_str.lower().startswith(("https://", "http://")):
+                        url_str = ""
+                    url = html.escape(url_str)
+                    refs.append(f'<li><a href="{url}">{label}</a></li>')
+                blocks.append(f"<ul>{''.join(refs)}</ul>")
     return "".join(blocks)
 
 

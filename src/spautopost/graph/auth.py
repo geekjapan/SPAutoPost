@@ -90,12 +90,14 @@ class DelegatedDeviceCodeAuth:
         )
         flow = app.initiate_device_flow(scopes=list(self._scopes))
         if "user_code" not in flow:
-            raise GraphAuthError("failed to initiate device code flow")
+            error_msg = flow.get("error_description") or flow.get("error") or "unknown error"
+            raise GraphAuthError(f"failed to initiate device code flow: {error_msg}")
         # flow["message"] は「このコードを入力してサインインせよ」という案内文（Secret ではない）。
         self._prompt(flow["message"])
         result = app.acquire_token_by_device_flow(flow)
         if "access_token" not in result:
-            raise GraphAuthError(f"device code auth failed: {result.get('error')}")
+            error_msg = result.get("error_description") or result.get("error") or "unknown error"
+            raise GraphAuthError(f"device code auth failed: {error_msg}")
         return AuthResult(
             access_token=result["access_token"],
             identity=identity_from_claims(result.get("id_token_claims", {})),
