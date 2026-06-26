@@ -107,6 +107,12 @@ class TestValidateConfig:
         assert status.valid is False
         assert any("auth_env_var" in issue for issue in status.issues)
 
+    def test_http_endpoint_url_returns_invalid(self) -> None:
+        provider = GenericApiLLMProvider(_config(endpoint_url="http://api.example.test/v1/chat"))
+        status = provider.validate_config()
+        assert status.valid is False
+        assert any("https" in issue for issue in status.issues)
+
     def test_status_metadata_has_correct_provider_type(self) -> None:
         provider = GenericApiLLMProvider(_config())
         status = provider.validate_config()
@@ -262,8 +268,9 @@ class TestGenerateDraftErrors:
         with pytest.raises(LLMProviderError) as exc_info:
             provider.generate_draft(_draft_input())
         assert exc_info.value.retryable is False
-        # env var 名は含まれてよいが値は含まれない
-        assert "LLM_API_KEY" in str(exc_info.value) or "not set" in str(exc_info.value)
+        # env var 名は含まれる（値は含まれない）
+        assert "LLM_API_KEY" in str(exc_info.value)
+        assert "not set" in str(exc_info.value)
 
     def test_http_5xx_raises_retryable_error(self, monkeypatch: pytest.MonkeyPatch) -> None:
         import urllib.error
@@ -321,6 +328,35 @@ class TestGenerateDraftErrors:
                 provider.generate_draft(_draft_input())
         assert exc_info.value.retryable is False
 
+    def test_parse_error_message_does_not_include_response_body(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("LLM_API_KEY", "sk-test")
+        secret_body = "SENSITIVE_RESPONSE_BODY_CONTENT"  # noqa: S105
+        provider = GenericApiLLMProvider(_config(max_retries=0))
+        with patch(
+            "urllib.request.urlopen",
+            return_value=_mock_urlopen(secret_body),
+        ):
+            with pytest.raises(LLMProviderError) as exc_info:
+                provider.generate_draft(_draft_input())
+        assert secret_body not in str(exc_info.value)
+
+    def test_http_429_raises_retryable_error(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        import urllib.error
+
+        monkeypatch.setenv("LLM_API_KEY", "sk-test")
+        provider = GenericApiLLMProvider(_config(max_retries=0))
+        with patch(
+            "urllib.request.urlopen",
+            side_effect=urllib.error.HTTPError(
+                "https://api.example.test", 429, "Too Many Requests", {}, None
+            ),
+        ):
+            with pytest.raises(LLMProviderError) as exc_info:
+                provider.generate_draft(_draft_input())
+        assert exc_info.value.retryable is True
+
     def test_malformed_api_response_raises_non_retryable_error(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
@@ -356,6 +392,27 @@ class TestGenerateDraftErrors:
                 provider.generate_draft(_draft_input())
         # max_retries=2: 初回 1 + リトライ 2 = 計 3 回
         assert call_count == 3
+
+    def test_retries_and_succeeds_on_second_attempt(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        import urllib.error
+
+        monkeypatch.setenv("LLM_API_KEY", "sk-test")
+        call_count = 0
+
+        def side_effect(*args: object, **kwargs: object) -> MagicMock:
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                raise urllib.error.HTTPError(
+                    "https://api.example.test", 503, "Service Unavailable", {}, None
+                )
+            return _mock_urlopen(_valid_content())
+
+        provider = GenericApiLLMProvider(_config(max_retries=2))
+        with patch("urllib.request.urlopen", side_effect=side_effect):
+            result = provider.generate_draft(_draft_input())
+        assert call_count == 2
+        assert result.title != ""
 
     def test_no_retry_on_4xx(self, monkeypatch: pytest.MonkeyPatch) -> None:
         import urllib.error

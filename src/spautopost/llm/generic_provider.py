@@ -49,7 +49,9 @@ _SYSTEM_PROMPT = """\
 }
 """
 
-# advisory フィールドの送信許可リスト（禁止情報を除外するため明示）
+# advisory / reference フィールドの送信許可リスト（禁止情報を除外するため明示）
+_ALLOWED_REFERENCE_FIELDS = frozenset({"title", "url"})
+
 _ALLOWED_ADVISORY_FIELDS = frozenset(
     {
         "title",
@@ -117,6 +119,8 @@ class GenericApiLLMProvider:
         issues: list[str] = []
         if not self._config.endpoint_url:
             issues.append("llm.endpoint_url is required for generic_api provider")
+        elif not self._config.endpoint_url.startswith("https://"):
+            issues.append("llm.endpoint_url must use https:// to protect Bearer token in transit")
         if not self._config.model:
             issues.append("llm.model is required for generic_api provider")
         if not self._config.auth_env_var:
@@ -149,15 +153,15 @@ class GenericApiLLMProvider:
     # ------------------------------------------------------------------
 
     def _call_with_retry(self, draft_input: DraftInput, token: str) -> DraftOutput:
-        last_error: LLMProviderError | None = None
         for attempt in range(self._config.max_retries + 1):
             try:
                 return self._attempt(draft_input, token)
             except LLMProviderError as exc:
-                last_error = exc
                 if not exc.retryable or attempt >= self._config.max_retries:
                     raise
-        raise last_error  # type: ignore[misc]
+        # max_retries >= 0 保証（config validation 済み）かつ retryable=True の場合、
+        # ループ内で必ず raise されるためここには到達しない
+        raise AssertionError("unreachable")
 
     def _attempt(self, draft_input: DraftInput, token: str) -> DraftOutput:
         payload = _build_payload(self._config.model or "", draft_input)
@@ -177,7 +181,7 @@ class GenericApiLLMProvider:
             with urllib.request.urlopen(req, timeout=self._config.timeout_seconds) as resp:  # noqa: S310
                 body = resp.read()
         except urllib.error.HTTPError as exc:
-            retryable = exc.code >= 500
+            retryable = exc.code >= 500 or exc.code == 429
             raise LLMProviderError(
                 f"HTTP {exc.code} from LLM API",
                 retryable=retryable,
@@ -208,6 +212,7 @@ def _build_payload(model: str, draft_input: DraftInput) -> dict[str, Any]:
 def _build_user_message(draft_input: DraftInput) -> str:
     """DraftInput を LLM ユーザーメッセージに変換する。Secret・PII を含めない。"""
     advisory_safe = _safe_advisory(draft_input.advisory)
+    refs_safe = _safe_references(draft_input.references)
     lines = [
         f"urgency: {draft_input.urgency}",
         f"target_audience: {draft_input.target_audience}",
@@ -219,9 +224,22 @@ def _build_user_message(draft_input: DraftInput) -> str:
         json.dumps(advisory_safe, ensure_ascii=False, indent=2),
         "",
         "references:",
-        json.dumps(list(draft_input.references), ensure_ascii=False, indent=2),
+        json.dumps(refs_safe, ensure_ascii=False, indent=2),
     ]
     return "\n".join(lines)
+
+
+def _safe_references(refs: object) -> list[dict[str, str]]:
+    """references から title・url のみ抽出する（内部 URL 等の禁止情報を除外）。"""
+    if not isinstance(refs, Sequence) or isinstance(refs, str | bytes | bytearray):
+        return []
+    result: list[dict[str, str]] = []
+    for ref in refs:
+        if isinstance(ref, Mapping):
+            safe = {k: str(v) for k, v in ref.items() if k in _ALLOWED_REFERENCE_FIELDS}
+            if safe:
+                result.append(safe)
+    return result
 
 
 def _safe_advisory(advisory: object) -> dict[str, object]:
@@ -243,9 +261,9 @@ def _parse_body(body: bytes, draft_input: DraftInput) -> DraftOutput:
         output_data: dict[str, Any] = json.loads(content)
     except (json.JSONDecodeError, KeyError, IndexError, TypeError) as exc:
         raise LLMProviderError(
-            f"failed to parse LLM API response: {exc}",
+            f"failed to parse LLM API response: {type(exc).__name__}",
             retryable=False,
-        ) from exc
+        ) from None
     return _build_draft_output(output_data, draft_input)
 
 

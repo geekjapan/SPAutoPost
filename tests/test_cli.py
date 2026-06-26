@@ -272,7 +272,7 @@ def test_preview_draft_always_uses_mock_provider(
     default_config = config_dir / "default.yml"
     default_config.write_text(
         default_config.read_text(encoding="utf-8").replace(
-            "provider: test_mock", "provider: production_api"
+            "provider: test_mock", "provider: production_api\n  production_approved: true"
         ),
         encoding="utf-8",
     )

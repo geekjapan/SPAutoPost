@@ -38,6 +38,7 @@ _SECTION_KEYS: dict[str, frozenset[str]] = {
             "timeout_seconds",
             "max_retries",
             "provider_name",
+            "production_approved",
         }
     ),
     "sharepoint": frozenset(
@@ -104,6 +105,7 @@ class LLMConfig:
     timeout_seconds: int = 30
     max_retries: int = 3
     provider_name: str | None = None
+    production_approved: bool = False
 
 
 @dataclass(frozen=True)
@@ -333,7 +335,21 @@ def _validate_llm(raw: Mapping[str, Any], issues: list[str]) -> LLMConfig:
     auth_env_var = _opt_str(sec, "auth_env_var", "llm.auth_env_var", issues)
     provider_name = _opt_str(sec, "provider_name", "llm.provider_name", issues)
     timeout_seconds = _int(sec, "timeout_seconds", 30, "llm.timeout_seconds", issues)
+    if timeout_seconds <= 0:
+        issues.append("llm.timeout_seconds must be a positive integer")
     max_retries = _int(sec, "max_retries", 3, "llm.max_retries", issues)
+    if max_retries < 0:
+        issues.append("llm.max_retries must be 0 or greater")
+    production_approved = _bool(
+        sec, "production_approved", False, "llm.production_approved", issues
+    )
+    _PRODUCTION_PROVIDERS = frozenset({"production_api", "production_flow", "generic_api"})
+    if provider in _PRODUCTION_PROVIDERS and not production_approved:
+        issues.append(
+            f"llm.production_approved must be true to use provider={provider!r}; "
+            "obtain information-security department approval first "
+            "(see docs/specs/llm-provider.md)"
+        )
     return LLMConfig(
         provider=provider if isinstance(provider, str) else "",
         prompt_version=prompt_version,
@@ -343,6 +359,7 @@ def _validate_llm(raw: Mapping[str, Any], issues: list[str]) -> LLMConfig:
         timeout_seconds=timeout_seconds,
         max_retries=max_retries,
         provider_name=provider_name,
+        production_approved=production_approved,
     )
 
 
