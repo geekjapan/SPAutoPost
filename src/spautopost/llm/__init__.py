@@ -138,8 +138,13 @@ def build_llm_provider(config: LLMConfig, *, fixture: DraftOutput | None = None)
                 "llm.azure config is required when provider=production_api"
             )
         return AzureOpenAIProvider(config.azure, prompt_version=config.prompt_version)
+    if config.provider == "generic_api":
+        from .generic_provider import GenericApiLLMProvider
+
+        return GenericApiLLMProvider(config)
     raise LLMProviderConfigError(
-        f"llm provider {config.provider!r} is not supported; only 'test_mock' is implemented"
+        f"llm provider {config.provider!r} is not supported; "
+        "only 'test_mock', 'production_api' and 'generic_api' are implemented"
     )
 
 

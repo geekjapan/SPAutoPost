@@ -276,7 +276,8 @@ def test_preview_draft_always_uses_mock_provider(
         "  azure:\n"
         "    endpoint: https://example.openai.azure.com\n"
         "    deployment: gpt-4o\n"
-        "    api_key: env:AZURE_OPENAI_API_KEY"
+        "    api_key: env:AZURE_OPENAI_API_KEY\n"
+        "    production_approved: true"
     )
     default_config.write_text(
         default_config.read_text(encoding="utf-8").replace("provider: test_mock", azure_snippet),
