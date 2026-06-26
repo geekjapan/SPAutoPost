@@ -106,11 +106,11 @@ Azure Container Apps / Jobs で利用する managed identity です。
 | `Sites.Selected` | Application | 対象 site への読み書きスコープ限定（推奨） |
 | `Pages.ReadWrite.All` | Application | Site Page / News 記事の作成・更新（Sites.Selected 対応状況による） |
 
-**M1 で確認すること**: `Sites.Selected` + `Pages.ReadWrite.All` の組み合わせで Site Page / News の作成・更新・公開が可能か。不可能な場合は代替 permission を評価する。
+**M1 で確認すること**: `Sites.Selected` + `Pages.ReadWrite.All` の組み合わせで Site Page / News の作成・更新・公開が可能か。`Pages.ReadWrite.All` が Graph API の site page 作成に対応していない場合（Microsoft Docs では `Sites.ReadWrite.All` が application permission として記載されている）、`Sites.ReadWrite.All` を例外的に採用し、対象 site を `Sites.Selected` で可能な限り限定した上で decision record に理由を記録する。
 
 ## SharePoint 対象範囲の限定
 
-- 投稿対象 SharePoint site URL は設定ファイル（`sharepoint.site_url`）で明示的に指定する。
+- 投稿対象 SharePoint site は設定ファイル（`sharepoint.site_id`）で明示的に指定する。
 - 設定ファイルに記載されていない site への投稿は拒否し、audit log に記録する。
 - 任意 URL への投稿は禁止する。
 - `Sites.Selected` permission によって、付与対象 site 以外への Graph API アクセスは API レベルでも拒否される。
@@ -118,7 +118,7 @@ Azure Container Apps / Jobs で利用する managed identity です。
 ## Required Follow-ups（M1）
 
 - user-assigned managed identity に `Sites.Selected` permission を付与できるか確認する。
-- `Sites.Selected` + `Pages.ReadWrite.All` の組み合わせで Site Page / News の作成・更新・公開が可能かを検証する。
+- `Sites.Selected` + `Pages.ReadWrite.All` の組み合わせで Site Page / News の作成・更新・公開が可能かを検証する。不可能な場合は `Sites.ReadWrite.All` の例外採用と decision record 記録を行う。
 - application permission / app-only fallback を使う条件（managed identity 不可）を M1 終了時に確定する。
 - approve した user principal と publish を実行した service identity を AuditEvent にどう保存するかを設計する。
 
