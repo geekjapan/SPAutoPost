@@ -19,4 +19,4 @@
 
 - [x] 4.1 `openspec validate issue-35-evaluate-llm-providers --strict` を実行し全チェックが通ることを確認する
 - [x] 4.2 更新した `docs/specs/llm-provider.md` と ADR の内容が Issue #35 の受け入れ条件を満たすことを確認する
-- [ ] 4.3 Issue #16 (#17) に M3 前提条件を blocked-by コメントとして追記する（任意）
+- [x] 4.3 Issue #16 (#17) に M3 前提条件を blocked-by コメントとして追記する（任意・スキップ）
