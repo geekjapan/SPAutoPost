@@ -80,6 +80,20 @@ describe("easyAuthAuthenticator", () => {
     );
   });
 
+  it("rejects a malformed EasyAuth principal header even if principal-id header is present (401)", () => {
+    const headers = new Map([
+      ["x-ms-client-principal", "not-valid-base64-json"],
+      ["x-ms-client-principal-id", "some-id"],
+    ]);
+    assert.throws(
+      () => easyAuthAuthenticator(headers),
+      (error: unknown) =>
+        error instanceof ApiError &&
+        error.status === 401 &&
+        error.code === "invalid_admin_principal",
+    );
+  });
+
   it("rejects an authenticated principal that maps to no admin role (403)", () => {
     assert.throws(
       () =>
@@ -143,6 +157,11 @@ describe("resolveAuthenticator", () => {
 
   it("fails closed when dev auth is requested with NODE_ENV=production", () => {
     assert.throws(() => resolveAuthenticator({ ADMIN_AUTH_MODE: "dev", NODE_ENV: "production" }));
+  });
+
+  it("fails closed when dev auth is requested with case-insensitive NODE_ENV variations", () => {
+    assert.throws(() => resolveAuthenticator({ ADMIN_AUTH_MODE: "dev", NODE_ENV: "PRODUCTION" }));
+    assert.throws(() => resolveAuthenticator({ ADMIN_AUTH_MODE: "dev", NODE_ENV: "Production" }));
   });
 
   it("rejects an unknown auth mode", () => {

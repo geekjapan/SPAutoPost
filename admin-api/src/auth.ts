@@ -30,7 +30,15 @@ interface EasyAuthPrincipal {
  * principal. Never validates tokens or holds secrets (Option A).
  */
 export function easyAuthAuthenticator(headers: ReadonlyMap<string, string>): AdminPrincipal {
-  const principal = decodeEasyAuthPrincipal(headers.get(EASYAUTH_PRINCIPAL_HEADER));
+  const rawPrincipal = headers.get(EASYAUTH_PRINCIPAL_HEADER);
+  const principal = decodeEasyAuthPrincipal(rawPrincipal);
+  if (rawPrincipal && !principal) {
+    throw new ApiError(
+      401,
+      "invalid_admin_principal",
+      "Entra ID authenticated principal is malformed",
+    );
+  }
   const claims = principal?.claims ?? [];
 
   const principalId =
@@ -73,7 +81,7 @@ export function resolveAuthenticator(env: Record<string, string | undefined> = p
     return easyAuthAuthenticator;
   }
   if (mode === "dev") {
-    if ((env.NODE_ENV ?? "").trim() === "production") {
+    if ((env.NODE_ENV ?? "").trim().toLowerCase() === "production") {
       throw new Error(
         "ADMIN_AUTH_MODE=dev must not be used with NODE_ENV=production (dev auth bypass is disabled in production)",
       );
