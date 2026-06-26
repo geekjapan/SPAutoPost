@@ -133,6 +133,10 @@ MVP では手動入力を必須とします。
 
 - 出典表示要件を確認する。
 - 日本語本文を Draft Composition に活用する。
+- MyJVN API は認証不要の公開 API として扱い、secret / credential を保存しない。
+- 運用者は利用前に MyJVN API 利用規約を確認し、rate limit や禁止事項に反しない取得間隔を設定する。
+- MyJVN 由来の情報を掲示・原稿・管理画面に表示する場合、MyJVN API から取得した情報であることと JVN iPedia の該当 URL を出典として表示する。
+- `Advisory` に mitigation 専用フィールドが追加されるまでは、詳細情報の `Solution` / workaround は日本語 `summary` に含めて保持する。
 
 ## KEV Adapter
 
