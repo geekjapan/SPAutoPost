@@ -1,6 +1,6 @@
 # Delta Spec: llm-provider
 
-## MODIFIED Requirements
+## ADDED Requirements
 
 ### Requirement: build_llm_provider が generic_api provider を構築する
 
