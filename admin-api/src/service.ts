@@ -271,6 +271,6 @@ function parseRoles(raw: string | undefined): readonly AdminRole[] {
   return [...roles];
 }
 
-function isAdminRole(value: string): value is AdminRole {
+export function isAdminRole(value: string): value is AdminRole {
   return ["viewer", "reviewer", "approver", "publisher", "admin"].includes(value);
 }

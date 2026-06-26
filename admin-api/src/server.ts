@@ -1,4 +1,5 @@
 import { createServer } from "node:http";
+import { resolveAuthenticator } from "./auth.js";
 import { createNodeHandler } from "./http.js";
 import { PostgresAdminApiStore } from "./postgres.js";
 
@@ -7,9 +8,12 @@ export function startAdminApiServer(): void {
   if (!databaseUrl) {
     throw new Error("SPAUTOPOST_DATABASE_URL or DATABASE_URL is required for Admin API");
   }
+  // Resolve the authenticator at startup so a misconfigured dev bypass
+  // (ADMIN_AUTH_MODE=dev with NODE_ENV=production) fails closed immediately.
+  const authenticate = resolveAuthenticator();
   const port = parsePort(process.env.PORT ?? "3000");
   const store = new PostgresAdminApiStore(databaseUrl);
-  const server = createServer(createNodeHandler(store));
+  const server = createServer(createNodeHandler(store, authenticate));
   server.listen(port, () => {
     process.stdout.write(`SPAutoPost Admin API listening on http://127.0.0.1:${port}\n`);
   });

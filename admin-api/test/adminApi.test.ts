@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { beforeEach, describe, it } from "node:test";
+import { devHeaderAuthenticator } from "../src/auth.js";
 import { handleAdminApiRequest } from "../src/http.js";
 import { normalizeHeaders } from "../src/service.js";
 import type {
@@ -87,11 +88,15 @@ beforeEach(() => {
 
 describe("Admin API skeleton", () => {
   it("returns DraftPost list without mutating state", async () => {
-    const response = await handleAdminApiRequest(store, {
-      method: "GET",
-      path: "/api/drafts",
-      headers: headers({ roles: "viewer" }),
-    });
+    const response = await handleAdminApiRequest(
+      store,
+      {
+        method: "GET",
+        path: "/api/drafts",
+        headers: headers({ roles: "viewer" }),
+      },
+      devHeaderAuthenticator,
+    );
 
     assert.equal(response.status, 200);
     assert.equal(store.enqueued.length, 0);
@@ -99,27 +104,35 @@ describe("Admin API skeleton", () => {
   });
 
   it("treats empty pagination query parameters as defaults", async () => {
-    const response = await handleAdminApiRequest(store, {
-      method: "GET",
-      path: "/api/drafts",
-      query: new Map([
-        ["limit", " "],
-        ["offset", ""],
-      ]),
-      headers: headers({ roles: "viewer" }),
-    });
+    const response = await handleAdminApiRequest(
+      store,
+      {
+        method: "GET",
+        path: "/api/drafts",
+        query: new Map([
+          ["limit", " "],
+          ["offset", ""],
+        ]),
+        headers: headers({ roles: "viewer" }),
+      },
+      devHeaderAuthenticator,
+    );
 
     assert.equal(response.status, 200);
     assert.deepEqual(response.body.pagination, { limit: 100, offset: 0 });
   });
 
   it("requires a client Idempotency-Key for state-changing writes", async () => {
-    const response = await handleAdminApiRequest(store, {
-      method: "POST",
-      path: "/api/drafts/draft-1/approve",
-      headers: headers({ roles: "approver" }),
-      body: {},
-    });
+    const response = await handleAdminApiRequest(
+      store,
+      {
+        method: "POST",
+        path: "/api/drafts/draft-1/approve",
+        headers: headers({ roles: "approver" }),
+        body: {},
+      },
+      devHeaderAuthenticator,
+    );
 
     assert.equal(response.status, 400);
     assert.equal(store.enqueued.length, 0);
@@ -133,33 +146,45 @@ describe("Admin API skeleton", () => {
   });
 
   it("requires an admin principal for read paths", async () => {
-    const response = await handleAdminApiRequest(store, {
-      method: "GET",
-      path: "/api/drafts",
-      headers: new Map(),
-    });
+    const response = await handleAdminApiRequest(
+      store,
+      {
+        method: "GET",
+        path: "/api/drafts",
+        headers: new Map(),
+      },
+      devHeaderAuthenticator,
+    );
 
     assert.equal(response.status, 401);
     assert.equal(store.enqueued.length, 0);
   });
 
   it("requires an admin principal for command status reads", async () => {
-    const response = await handleAdminApiRequest(store, {
-      method: "GET",
-      path: "/api/commands/command-1",
-      headers: new Map(),
-    });
+    const response = await handleAdminApiRequest(
+      store,
+      {
+        method: "GET",
+        path: "/api/commands/command-1",
+        headers: new Map(),
+      },
+      devHeaderAuthenticator,
+    );
 
     assert.equal(response.status, 401);
   });
 
   it("enqueues approve as AdminCommand and exposes a status URL", async () => {
-    const response = await handleAdminApiRequest(store, {
-      method: "POST",
-      path: "/api/drafts/draft-1/approve",
-      headers: headers({ roles: "approver", idempotencyKey: "retry-1" }),
-      body: { comment: "Reviewed" },
-    });
+    const response = await handleAdminApiRequest(
+      store,
+      {
+        method: "POST",
+        path: "/api/drafts/draft-1/approve",
+        headers: headers({ roles: "approver", idempotencyKey: "retry-1" }),
+        body: { comment: "Reviewed" },
+      },
+      devHeaderAuthenticator,
+    );
 
     assert.equal(response.status, 202);
     assert.equal(store.enqueued.length, 1);
@@ -178,8 +203,8 @@ describe("Admin API skeleton", () => {
       body: { comment: "Needs rewrite" },
     };
 
-    const first = await handleAdminApiRequest(store, request);
-    const second = await handleAdminApiRequest(store, request);
+    const first = await handleAdminApiRequest(store, request, devHeaderAuthenticator);
+    const second = await handleAdminApiRequest(store, request, devHeaderAuthenticator);
 
     assert.equal(first.status, 202);
     assert.equal(second.status, 202);
@@ -188,18 +213,26 @@ describe("Admin API skeleton", () => {
   });
 
   it("scopes idempotency keys by principal", async () => {
-    const first = await handleAdminApiRequest(store, {
-      method: "POST",
-      path: "/api/drafts/draft-1/reject",
-      headers: headers({ roles: "reviewer", idempotencyKey: "retry-3" }),
-      body: { comment: "Needs rewrite" },
-    });
-    const second = await handleAdminApiRequest(store, {
-      method: "POST",
-      path: "/api/drafts/draft-1/reject",
-      headers: headers({ user: "user-2", roles: "reviewer", idempotencyKey: "retry-3" }),
-      body: { comment: "Needs rewrite" },
-    });
+    const first = await handleAdminApiRequest(
+      store,
+      {
+        method: "POST",
+        path: "/api/drafts/draft-1/reject",
+        headers: headers({ roles: "reviewer", idempotencyKey: "retry-3" }),
+        body: { comment: "Needs rewrite" },
+      },
+      devHeaderAuthenticator,
+    );
+    const second = await handleAdminApiRequest(
+      store,
+      {
+        method: "POST",
+        path: "/api/drafts/draft-1/reject",
+        headers: headers({ user: "user-2", roles: "reviewer", idempotencyKey: "retry-3" }),
+        body: { comment: "Needs rewrite" },
+      },
+      devHeaderAuthenticator,
+    );
 
     assert.equal(first.status, 202);
     assert.equal(second.status, 202);
@@ -208,41 +241,57 @@ describe("Admin API skeleton", () => {
   });
 
   it("treats malformed encoded path parameters as not found", async () => {
-    const response = await handleAdminApiRequest(store, {
-      method: "GET",
-      path: "/api/drafts/%E0%A4%A",
-      headers: headers({ roles: "viewer" }),
-    });
+    const response = await handleAdminApiRequest(
+      store,
+      {
+        method: "GET",
+        path: "/api/drafts/%E0%A4%A",
+        headers: headers({ roles: "viewer" }),
+      },
+      devHeaderAuthenticator,
+    );
 
     assert.equal(response.status, 404);
   });
 
   it("rejects publish request unless the principal has publisher role", async () => {
-    const response = await handleAdminApiRequest(store, {
-      method: "POST",
-      path: "/api/drafts/draft-1/publish-request",
-      headers: headers({ roles: "reviewer", idempotencyKey: "publish-1" }),
-      body: {},
-    });
+    const response = await handleAdminApiRequest(
+      store,
+      {
+        method: "POST",
+        path: "/api/drafts/draft-1/publish-request",
+        headers: headers({ roles: "reviewer", idempotencyKey: "publish-1" }),
+        body: {},
+      },
+      devHeaderAuthenticator,
+    );
 
     assert.equal(response.status, 403);
     assert.equal(store.enqueued.length, 0);
   });
 
   it("returns command status for async reviewer feedback", async () => {
-    const enqueued = await handleAdminApiRequest(store, {
-      method: "PATCH",
-      path: "/api/drafts/draft-1",
-      headers: headers({ roles: "reviewer", idempotencyKey: "edit-1" }),
-      body: { title: "Updated title" },
-    });
+    const enqueued = await handleAdminApiRequest(
+      store,
+      {
+        method: "PATCH",
+        path: "/api/drafts/draft-1",
+        headers: headers({ roles: "reviewer", idempotencyKey: "edit-1" }),
+        body: { title: "Updated title" },
+      },
+      devHeaderAuthenticator,
+    );
     const command = (enqueued.body.data as { command: AdminCommand }).command;
 
-    const response = await handleAdminApiRequest(store, {
-      method: "GET",
-      path: `/api/commands/${command.commandId}`,
-      headers: headers({ roles: "viewer" }),
-    });
+    const response = await handleAdminApiRequest(
+      store,
+      {
+        method: "GET",
+        path: `/api/commands/${command.commandId}`,
+        headers: headers({ roles: "viewer" }),
+      },
+      devHeaderAuthenticator,
+    );
 
     assert.equal(response.status, 200);
     assert.deepEqual(response.body.data, {
@@ -256,12 +305,16 @@ describe("Admin API skeleton", () => {
   });
 
   it("rejects secret-looking AdminCommand payload keys", async () => {
-    const response = await handleAdminApiRequest(store, {
-      method: "PATCH",
-      path: "/api/drafts/draft-1",
-      headers: headers({ roles: "reviewer", idempotencyKey: "secret-payload-1" }),
-      body: { nested: { access_token: "not-stored" } },
-    });
+    const response = await handleAdminApiRequest(
+      store,
+      {
+        method: "PATCH",
+        path: "/api/drafts/draft-1",
+        headers: headers({ roles: "reviewer", idempotencyKey: "secret-payload-1" }),
+        body: { nested: { access_token: "not-stored" } },
+      },
+      devHeaderAuthenticator,
+    );
 
     assert.equal(response.status, 400);
     assert.equal(store.enqueued.length, 0);
@@ -280,12 +333,16 @@ describe("Admin API skeleton", () => {
       "x-spautopost-roles": ["viewer", "approver"],
     });
 
-    const response = await handleAdminApiRequest(store, {
-      method: "POST",
-      path: "/api/drafts/draft-1/approve",
-      headers: new Map([...normalized, ["idempotency-key", "multi-header-1"]]),
-      body: {},
-    });
+    const response = await handleAdminApiRequest(
+      store,
+      {
+        method: "POST",
+        path: "/api/drafts/draft-1/approve",
+        headers: new Map([...normalized, ["idempotency-key", "multi-header-1"]]),
+        body: {},
+      },
+      devHeaderAuthenticator,
+    );
 
     assert.equal(response.status, 202);
     assert.equal(store.enqueued[0]?.commandType, "approve");

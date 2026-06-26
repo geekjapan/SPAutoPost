@@ -1,4 +1,5 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
+import { resolveAuthenticator, type Authenticator } from "./auth.js";
 import {
   ApiError,
   enqueueDraftCommand,
@@ -7,7 +8,6 @@ import {
   listAuditEvents,
   listDrafts,
   normalizeHeaders,
-  parsePrincipal,
   type ApiResponse,
 } from "./service.js";
 import type { AdminApiStore, AdminCommandType } from "./types.js";
@@ -25,29 +25,30 @@ export interface HttpRequest {
 export async function handleAdminApiRequest(
   store: AdminApiStore,
   request: HttpRequest,
+  authenticate: Authenticator,
 ): Promise<ApiResponse> {
   try {
     if (request.method === "GET" && request.path === "/api/drafts") {
-      return await listDrafts(store, contextFrom(request), pageParams(request.query));
+      return await listDrafts(store, contextFrom(request, authenticate), pageParams(request.query));
     }
 
     const commandMatch = matchCommandPath(request.path);
     if (request.method === "GET" && commandMatch) {
-      return await getCommandStatus(store, contextFrom(request), commandMatch.commandId);
+      return await getCommandStatus(store, contextFrom(request, authenticate), commandMatch.commandId);
     }
 
     const auditMatch = matchDraftAuditPath(request.path);
     if (request.method === "GET" && auditMatch) {
-      return await listAuditEvents(store, contextFrom(request), auditMatch.draftId);
+      return await listAuditEvents(store, contextFrom(request, authenticate), auditMatch.draftId);
     }
 
     const draftMatch = matchDraftPath(request.path);
     if (request.method === "GET" && draftMatch) {
-      return await getDraft(store, contextFrom(request), draftMatch.draftId);
+      return await getDraft(store, contextFrom(request, authenticate), draftMatch.draftId);
     }
 
     if (request.method === "PATCH" && draftMatch) {
-      return await enqueueDraftCommand(store, contextFrom(request), {
+      return await enqueueDraftCommand(store, contextFrom(request, authenticate), {
         draftId: draftMatch.draftId,
         commandType: "edit",
         payload: objectBody(request.body),
@@ -56,7 +57,7 @@ export async function handleAdminApiRequest(
 
     const actionMatch = matchDraftActionPath(request.path);
     if (request.method === "POST" && actionMatch) {
-      return await enqueueDraftCommand(store, contextFrom(request), {
+      return await enqueueDraftCommand(store, contextFrom(request, authenticate), {
         draftId: actionMatch.draftId,
         commandType: commandTypeFromRoute(actionMatch.action),
         payload: objectBody(request.body),
@@ -69,10 +70,13 @@ export async function handleAdminApiRequest(
   }
 }
 
-export function createNodeHandler(store: AdminApiStore) {
+export function createNodeHandler(
+  store: AdminApiStore,
+  authenticate: Authenticator = resolveAuthenticator(),
+) {
   return async (request: IncomingMessage, response: ServerResponse): Promise<void> => {
     const url = new URL(request.url ?? "/", "http://localhost");
-    const apiResponse = await responseForNodeRequest(store, request, url);
+    const apiResponse = await responseForNodeRequest(store, request, url, authenticate);
     response.writeHead(apiResponse.status, { "content-type": "application/json; charset=utf-8" });
     response.end(JSON.stringify(apiResponse.body));
   };
@@ -82,23 +86,28 @@ async function responseForNodeRequest(
   store: AdminApiStore,
   request: IncomingMessage,
   url: URL,
+  authenticate: Authenticator,
 ): Promise<ApiResponse> {
   try {
-    return await handleAdminApiRequest(store, {
-      method: request.method ?? "GET",
-      path: url.pathname,
-      query: new Map(url.searchParams.entries()),
-      headers: normalizeHeaders(request.headers),
-      body: await readJsonBody(request),
-    });
+    return await handleAdminApiRequest(
+      store,
+      {
+        method: request.method ?? "GET",
+        path: url.pathname,
+        query: new Map(url.searchParams.entries()),
+        headers: normalizeHeaders(request.headers),
+        body: await readJsonBody(request),
+      },
+      authenticate,
+    );
   } catch (error) {
     return errorResponse(error);
   }
 }
 
-function contextFrom(request: HttpRequest) {
+function contextFrom(request: HttpRequest, authenticate: Authenticator) {
   return {
-    principal: parsePrincipal(request.headers),
+    principal: authenticate(request.headers),
     headers: request.headers,
   };
 }
