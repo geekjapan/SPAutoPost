@@ -2,7 +2,7 @@
 
 ## Status
 
-Proposed
+Approved
 
 ## Purpose
 
@@ -87,6 +87,14 @@ AI 出力は次を満たす必要があります。
 - 一般利用者向けと管理者向けを分ける
 - 不確実な事項は不確実と示す
 - 人間レビュー前に公開しない
+
+## Auto-Publish Safety Policy
+
+**初期対象外: 自動公開は MVP 範囲外とする。**
+
+- LLM 出力を人間レビューなしに SharePoint へ自動公開してはならない。
+- すべての DraftPost は approved ステータスになるまで publish できない。
+- 自動公開（approved フロー不通過の publish）は将来的に個別 Issue で設計・承認を経てから追加する。
 
 ## Posting Safety
 

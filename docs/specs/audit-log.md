@@ -2,7 +2,7 @@
 
 ## Status
 
-Proposed
+Approved
 
 ## Purpose
 
@@ -18,15 +18,23 @@ Proposed
 
 ## AuditEvent Model
 
-必須項目:
+## Minimum Required Fields
 
-- audit_event_id
-- event_type
-- correlation_id
-- result
-- created_at
+すべての監査イベントに以下 5 フィールドが必須（SHALL）:
 
-推奨項目:
+| フィールド | 型 | 説明 |
+|---|---|---|
+| `audit_event_id` | UUID | イベント一意識別子 |
+| `event_type` | enum | イベント種別（下記 Event Types 参照） |
+| `correlation_id` | string | 一連処理の追跡 ID |
+| `result` | enum (success / failure / partial) | 処理結果 |
+| `created_at` | ISO 8601 UTC | イベント発生日時 |
+
+これら 5 フィールドのいずれかが欠けている場合、監査ログへの記録を拒否する。
+
+## AuditEvent Model
+
+推奨項目（必須 5 フィールドに加えて記録を推奨）:
 
 - actor
 - service_principal
