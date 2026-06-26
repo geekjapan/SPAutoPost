@@ -154,6 +154,9 @@ def _validate_envelope(payload: Mapping[str, object]) -> None:
 def _validate_advisory(raw: Mapping[str, object], index: int) -> list[str]:
     """advisory レコードの検証。issues が空なら有効。"""
     issues: list[str] = []
+    advisory_id = raw.get("advisory_id")
+    if advisory_id is not None and not isinstance(advisory_id, str):
+        issues.append(f"advisories[{index}].advisory_id は文字列である必要があります")
     if not _nonempty_str(raw.get("title")):
         issues.append(f"advisories[{index}].title は必須です")
     refs = raw.get("references")

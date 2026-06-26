@@ -345,6 +345,19 @@ def test_advisory_id_no_collision_with_delimiter_ambiguity(tmp_path: Path) -> No
 
 
 @pytest.mark.unit
+def test_non_string_advisory_id_is_rejected(tmp_path: Path) -> None:
+    """advisory_id が存在するが文字列以外（数値など）の場合、reject される。"""
+    for bad_id in [123, 1.5, True, [], {}]:
+        bad = {**_VALID_ADVISORY, "advisory_id": bad_id}
+        data = {**_VALID_PAYLOAD, "advisories": [bad]}
+        path = _make_json(tmp_path, data)
+        storage = _build_storage(tmp_path)
+        result = import_from_file(path, storage, now=_NOW)  # type: ignore[arg-type]
+        assert result.rejected_count == 1, f"expected reject for advisory_id={bad_id!r}"
+        assert "文字列" in result.rejected_records[0].reason
+
+
+@pytest.mark.unit
 def test_duplicate_advisory_id_in_batch_is_rejected(tmp_path: Path) -> None:
     """同一バッチ内で advisory_id が重複する場合、2 件目以降は reject される。"""
     dup = {**_VALID_ADVISORY, "advisory_id": "ADV-001"}
