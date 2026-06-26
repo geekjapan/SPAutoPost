@@ -46,12 +46,18 @@ def apply_migrations(conn, dialect: str, directory: Path | None = None,
         version = path.stem
         if version in applied:
             continue
-        for stmt in split_statements(path.read_text(encoding="utf-8")):
-            cur.execute(stmt)
-        cur.execute(
-            f"INSERT INTO schema_migrations (version, applied_at) "
-            f"VALUES ({placeholder}, {placeholder})",
-            (version, now_iso()),
-        )
+        cur.execute("BEGIN")
+        try:
+            for stmt in split_statements(path.read_text(encoding="utf-8")):
+                cur.execute(stmt)
+            cur.execute(
+                f"INSERT INTO schema_migrations (version, applied_at) "
+                f"VALUES ({placeholder}, {placeholder})",
+                (version, now_iso()),
+            )
+        except Exception:
+            cur.execute("ROLLBACK")
+            raise
+        cur.execute("COMMIT")
         newly.append(version)
     return newly
