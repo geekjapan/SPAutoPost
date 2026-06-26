@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 from typing import Literal, Protocol, runtime_checkable
 
 from spautopost.config import LLMConfig
+from spautopost.llm.validation import ValidationIssue, ValidationResult, validate_draft_output
 
 ProviderType = Literal[
     "production_api", "production_flow", "generic_api", "test_mock", "test_manual"
@@ -132,5 +133,8 @@ __all__ = [
     "MockLLMProvider",
     "ProviderMetadata",
     "ProviderStatus",
+    "ValidationIssue",
+    "ValidationResult",
     "build_llm_provider",
+    "validate_draft_output",
 ]
