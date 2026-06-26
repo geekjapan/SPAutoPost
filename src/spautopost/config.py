@@ -356,7 +356,10 @@ def _validate_azure_llm(
     max_retries_raw = sec.get("max_retries", _AZURE_DEFAULT_MAX_RETRIES)
     max_retries = _AZURE_DEFAULT_MAX_RETRIES
     if isinstance(max_retries_raw, int):
-        max_retries = max_retries_raw
+        if max_retries_raw < 0:
+            issues.append("llm.azure.max_retries must be >= 0")
+        else:
+            max_retries = max_retries_raw
     elif max_retries_raw is not None:
         issues.append("llm.azure.max_retries must be an integer")
     production_approved = _bool(

@@ -100,10 +100,16 @@ class AzureOpenAIProvider:
             issues.append(
                 "auth_type=managed_identity は未実装（M3 では api_key を使用してください）"
             )
-        elif cfg.auth_type == "api_key" and not cfg.api_key_ref:
-            issues.append(
-                "llm.azure.api_key が未設定（env:AZURE_OPENAI_API_KEY 形式で設定してください）"
-            )
+        elif cfg.auth_type == "api_key":
+            if not cfg.api_key_ref:
+                issues.append(
+                    "llm.azure.api_key が未設定（env:AZURE_OPENAI_API_KEY 形式で設定してください）"
+                )
+            elif not is_secret_ref(cfg.api_key_ref):
+                issues.append(
+                    "llm.azure.api_key は env:NAME 形式のシークレット参照を使用してください"
+                    "（例: env:AZURE_OPENAI_API_KEY）。生の API キー文字列は設定できません。"
+                )
         return ProviderStatus(
             valid=len(issues) == 0,
             issues=tuple(issues),
@@ -137,7 +143,10 @@ class AzureOpenAIProvider:
                 )
             return value
         if ref:
-            return ref
+            raise LLMProviderError(
+                "api_key_ref は env:NAME 形式で設定してください（生値は不可）",
+                is_retryable=False,
+            )
         raise LLMProviderError("api_key が設定されていない", is_retryable=False)
 
     def _retry_loop(self, draft_input: DraftInput, api_key: str) -> dict[str, Any]:

@@ -164,6 +164,44 @@ def test_validate_config_fails_for_managed_identity_auth_type() -> None:
     assert any("managed_identity" in issue for issue in status.issues)
 
 
+def test_validate_config_fails_when_api_key_ref_is_literal_string() -> None:
+    cfg = AzureOpenAIConfig(
+        endpoint="https://example.openai.azure.com",
+        deployment="gpt-4o",
+        api_version="2024-02-01",
+        auth_type="api_key",
+        api_key_ref="sk-literal-api-key",  # noqa: S106
+        timeout_secs=30,
+        max_retries=2,
+        production_approved=True,
+    )
+    provider = AzureOpenAIProvider(cfg)
+
+    status = provider.validate_config()
+
+    assert status.valid is False
+    assert any("env:NAME" in issue for issue in status.issues)
+
+
+def test_validate_config_fails_when_endpoint_is_http() -> None:
+    cfg = AzureOpenAIConfig(
+        endpoint="http://example.openai.azure.com",
+        deployment="gpt-4o",
+        api_version="2024-02-01",
+        auth_type="api_key",
+        api_key_ref="env:AZURE_OPENAI_API_KEY",
+        timeout_secs=30,
+        max_retries=2,
+        production_approved=True,
+    )
+    provider = AzureOpenAIProvider(cfg)
+
+    status = provider.validate_config()
+
+    assert status.valid is False
+    assert any("https://" in issue for issue in status.issues)
+
+
 def test_validate_config_does_not_include_secret_values_in_issues(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
