@@ -508,6 +508,7 @@ def test_retry_with_existing_page_id_calls_update(
     assert result.publication.publication_status == "published"
     assert result.publication.sharepoint_page_id == "existing-page-123"
     assert result.publication.operation == "update"
+    assert result.created is False, "update retry should not report created=True"
 
 
 def test_retry_without_page_id_calls_create(
@@ -646,3 +647,4 @@ def test_retry_update_with_promote_calls_publish_site_page(
     assert result.publication.publication_status == "published"
     assert result.publication.sharepoint_page_id == "existing-page-promote"
     assert result.publication.operation == "publish"
+    assert result.created is False, "update retry should not report created=True"

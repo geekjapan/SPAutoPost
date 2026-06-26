@@ -408,7 +408,10 @@ def publish_site_page(
         for audit in audits:
             store.audit_events.append(audit)
         return PublishResult(
-            publication=stored, audit_events=tuple(audits), dry_run=False, created=True
+            publication=stored,
+            audit_events=tuple(audits),
+            dry_run=False,
+            created=update_page_id is None,
         )
     except Exception as exc:  # noqa: BLE001 - 投稿失敗は failed として記録し伝播させない
         error_code, retryable = _failure_details(exc)
