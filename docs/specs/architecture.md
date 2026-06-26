@@ -290,7 +290,7 @@ External Sources
 
 MVP 実装前または M1 途中で決める必要がある未決事項:
 
-- Azure hosted runtime の Graph 認証方式を delegated / application / managed identity のどれにするか
+- ~~Azure hosted runtime の Graph 認証方式を delegated / application / managed identity のどれにするか~~ → **解消済み**（Issue #2 / `docs/specs/sharepoint-publishing.md`）: Azure hosted runtime は user-assigned managed identity（application permission）を第一候補とする。ローカル PoC は delegated permission を許容する。
 - Azure OpenAI / Foundry provider を M1 に含めるか、M3 まで待つか
 - Container Apps の app / job 分割をどこまで M1 に含めるか
 
