@@ -631,3 +631,19 @@ def test_build_page_html_newlines_become_br() -> None:
     html = build_page_html(draft)
     assert "<br />" in html
     assert "line1<br />line2" in html
+
+
+def test_build_page_html_deadline_rendered_when_set() -> None:
+    """Spec section 7 requires 対応期限または推奨対応時期 when deadline is set."""
+    deadline = datetime(2025, 3, 15, 12, 0, 0, tzinfo=UTC)
+    draft = dataclasses.replace(_make_draft(), deadline=deadline)
+    html = build_page_html(draft)
+    assert "対応期限または推奨対応時期" in html
+    assert "2025-03-15" in html
+
+
+def test_build_page_html_no_deadline_section_when_absent() -> None:
+    """Deadline section must not appear when deadline is None."""
+    draft = dataclasses.replace(_make_draft(), deadline=None)
+    html = build_page_html(draft)
+    assert "対応期限または推奨対応時期" not in html

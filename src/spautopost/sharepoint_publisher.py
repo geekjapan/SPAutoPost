@@ -196,6 +196,9 @@ def build_page_html(draft: DraftPost) -> str:
     if draft.admin_actions:
         items = "".join(f"<li>{_esc(a)}</li>" for a in draft.admin_actions)
         parts.append(f"<h2>管理者が行う対応</h2><ul>{items}</ul>")
+    if draft.deadline is not None:
+        formatted = draft.deadline.strftime("%Y-%m-%d %H:%M UTC")
+        parts.append(f"<h2>対応期限または推奨対応時期</h2><p>{_esc(formatted)}</p>")
     if draft.references:
         ref_items = "".join(_ref_item(r) for r in draft.references)
         parts.append(f"<h2>参考情報</h2><ul>{ref_items}</ul>")
