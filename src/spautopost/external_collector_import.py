@@ -217,6 +217,7 @@ def _process_advisories(
     accepted: list[tuple[SourceRecord, Advisory]] = []
     rejected: list[RejectedRecord] = []
     correlation_id = _nonempty_str(payload.get("correlation_id")) or uuid.uuid4().hex
+    seen_advisory_ids: set[str] = set()
 
     for index, raw in enumerate(raw_list):
         if not isinstance(raw, dict):
@@ -231,6 +232,17 @@ def _process_advisories(
             rejected.append(RejectedRecord(index=index, reason="; ".join(issues), raw=raw))
             continue
         pair = _to_storage_pair(raw, producer=producer, timestamp=timestamp)
+        adv_id = pair[1].advisory_id
+        if adv_id in seen_advisory_ids:
+            rejected.append(
+                RejectedRecord(
+                    index=index,
+                    reason=f"advisory_id '{adv_id}' がバッチ内で重複しています",
+                    raw=raw,
+                )
+            )
+            continue
+        seen_advisory_ids.add(adv_id)
         accepted.append(pair)
 
     source_records = [p[0] for p in accepted]

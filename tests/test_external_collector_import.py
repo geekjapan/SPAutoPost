@@ -345,6 +345,21 @@ def test_advisory_id_no_collision_with_delimiter_ambiguity(tmp_path: Path) -> No
 
 
 @pytest.mark.unit
+def test_duplicate_advisory_id_in_batch_is_rejected(tmp_path: Path) -> None:
+    """同一バッチ内で advisory_id が重複する場合、2 件目以降は reject される。"""
+    dup = {**_VALID_ADVISORY, "advisory_id": "ADV-001"}
+    data = {**_VALID_PAYLOAD, "advisories": [dup, dup]}
+    path = _make_json(tmp_path, data)
+    storage = _build_storage(tmp_path)
+
+    result = import_from_file(path, storage, now=_NOW)  # type: ignore[arg-type]
+
+    assert result.accepted_count == 1
+    assert result.rejected_count == 1
+    assert "重複" in result.rejected_records[0].reason
+
+
+@pytest.mark.unit
 def test_fallback_advisory_id_stable_across_ordering(tmp_path: Path) -> None:
     """advisory_id 省略時、ファイル内の並び順が変わっても same advisory_id を得る。"""
     adv_a = _VALID_ADVISORY
