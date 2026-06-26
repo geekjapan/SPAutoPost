@@ -556,3 +556,64 @@ def test_connector_rejects_non_graph_base_url() -> None:
             site_id=SITE_ID,
             base_url="https://attacker.example/v1.0",
         )
+
+
+@pytest.mark.unit
+def test_dry_run_after_failed_row_reuses_publication_id() -> None:
+    """Dry-run must not raise UNIQUE violation when a 'failed' row already exists."""
+    store = _StoreFake()
+    draft = _approved_draft()
+    key = build_idempotency_key(
+        draft_id=draft.draft_id,
+        site_id=SITE_ID,
+        page_library_id=PAGE_LIBRARY_ID,
+        advisory_ids=draft.advisory_ids,
+        title=draft.title,
+    )
+    failed_id = "prior-failed-id"
+    store.publications._by_key[key] = Publication(
+        publication_id=failed_id,
+        draft_id=draft.draft_id,
+        target_type="site-page",
+        target_site_id=SITE_ID,
+        publication_status="failed",
+        idempotency_key=key,
+        created_at=NOW,
+        updated_at=NOW,
+        error_code="graph_timeout",
+        retryable=True,
+        operation="create",
+    )
+    outcome = _connector(_exploding_transport, dry_run=True, store=store).publish_draft(draft)
+
+    assert outcome.publication.publication_status == "dry_run"
+    assert outcome.publication.publication_id == failed_id
+
+
+@pytest.mark.unit
+def test_token_provider_failure_records_failed_publication() -> None:
+    """A raising token_provider must record 'failed' to release the publishing reservation."""
+    store = _StoreFake()
+
+    def _bad_token() -> str:
+        raise RuntimeError("credential store unavailable")
+
+    connector = SharePointConnector(
+        transport=_exploding_transport,
+        token_provider=_bad_token,
+        site_id=SITE_ID,
+        page_library_id=PAGE_LIBRARY_ID,
+        dry_run=False,
+        store=store,
+        clock=lambda: NOW,
+        id_factory=_ids(),
+    )
+    outcome = connector.publish_draft(_approved_draft())
+
+    assert outcome.posted is False
+    assert outcome.publication.publication_status == "failed"
+    assert outcome.publication.error_code == "graph_authentication_failed"
+    # Reservation must be overwritten so a retry is not permanently blocked.
+    stored = store.publications.get_by_idempotency_key(outcome.publication.idempotency_key)
+    assert stored is not None
+    assert stored.publication_status == "failed"

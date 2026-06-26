@@ -272,14 +272,17 @@ class SharePointConnector:
         approver: str | None,
         publisher_principal: str | None,
     ) -> PublishOutcome:
-        # Reuse the existing publication_id when a prior dry-run row exists for this
-        # idempotency key.  The real storage backends upsert by publication_id (PK) and
-        # enforce a UNIQUE constraint on idempotency_key, so a fresh publication_id would
-        # cause a constraint violation on the second dry-run of the same draft.
+        # Reuse the existing publication_id for any prior row under this idempotency key.
+        # The real storage backends upsert by publication_id (PK) and enforce a UNIQUE
+        # constraint on idempotency_key.  If a "failed" row already exists (e.g. from a
+        # failed real publish attempt) and then a dry-run is requested, minting a fresh
+        # publication_id would cause a constraint violation on INSERT.  Reusing the prior
+        # PK makes upsert UPDATE the existing row in-place regardless of its prior status.
+        # By this point _existing_duplicate() has already intercepted "published"/"publishing".
         prior_id: str | None = None
         if self.store is not None:
             prior = self.store.publications.get_by_idempotency_key(key)
-            if prior is not None and prior.publication_status == "dry_run":
+            if prior is not None:
                 prior_id = prior.publication_id
         publication = Publication(
             publication_id=prior_id or self.id_factory(),
@@ -365,7 +368,27 @@ class SharePointConnector:
 
         payload = build_site_page_payload(draft)
         url = f"{self.base_url}/sites/{self.site_id}/pages"
-        headers = {"Authorization": f"Bearer {self.token_provider()}"}
+        # Obtain the token before opening the network connection.  If the provider
+        # raises (expired credential, misconfigured secret, etc.) we must record a
+        # failed Publication so the "publishing" reservation is overwritten and future
+        # retries are not permanently blocked by duplicate_detected.
+        try:
+            token = self.token_provider()
+        except Exception:
+            return self._record_failure(
+                draft,
+                key,
+                advisory_ids,
+                now,
+                correlation,
+                approver,
+                publisher_principal=publisher_principal,
+                error_code="graph_authentication_failed",
+                retryable=False,
+                status=None,
+                claim_id=claim_id,
+            )
+        headers = {"Authorization": f"Bearer {token}"}
         try:
             response = self.transport("POST", url, headers, payload)
         except GraphTransportError:
