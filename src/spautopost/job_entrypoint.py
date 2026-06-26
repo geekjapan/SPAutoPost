@@ -9,8 +9,8 @@ Safety policy (M1):
 - Hosted jobs run dry-run by default; publishing is always human-gated.
 - ``publish-approved`` processes pending ``publish_request`` AdminCommands.
   Real Graph API calls require ``allow_publish=true`` in config AND
-  ``SPAUTOPOST_GRAPH_ACCESS_TOKEN`` in the environment. Without those, the
-  job runs in effective dry-run mode (no external API calls).
+  ``SPAUTOPOST_GRAPH_ACCESS_TOKEN`` in the environment. Without a valid
+  token the job exits with a runtime error (no commands are claimed).
 
 Design / spec: openspec/changes/issue-25-add-azure-container-apps-deployment-skeleton/
 """

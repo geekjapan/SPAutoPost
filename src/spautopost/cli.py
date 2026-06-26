@@ -358,6 +358,7 @@ def _run_publish_approved(config: Config, dry_run: bool) -> int:
     投稿操作は人間が Admin UI/API で publish_request コマンドを発行した後にのみ実行される。
     """
     from .errors import GraphAuthError, PublishError
+    from .secrets import is_secret_ref, secret_env_name
     from .sharepoint_publisher import (
         MicrosoftGraphClient,
         NoopGraphClient,
@@ -368,6 +369,26 @@ def _run_publish_approved(config: Config, dry_run: bool) -> int:
 
     effective_dry_run = dry_run or not config.sharepoint.allow_publish
 
+    # Resolve env: references for SharePoint target identifiers at the publish boundary.
+    def _resolve(value: str | None) -> str:
+        if value and is_secret_ref(value):
+            return os.environ.get(secret_env_name(value), "")
+        return value or ""
+
+    target_site_id = _resolve(config.sharepoint.site_id)
+    target_page_library_id = _resolve(config.sharepoint.page_library_id)
+
+    # Validate Graph auth before claiming commands so that a missing token
+    # does not leave publish_request rows stuck in processing state.
+    if effective_dry_run:
+        graph: object = NoopGraphClient()
+    else:
+        try:
+            graph = MicrosoftGraphClient.from_env()
+        except GraphAuthError as exc:
+            print(f"Graph auth error: {exc}", file=sys.stderr)
+            return EXIT_RUNTIME_ERROR
+
     try:
         storage = build_storage(config.storage)
     except StorageError as exc:
@@ -376,8 +397,8 @@ def _run_publish_approved(config: Config, dry_run: bool) -> int:
 
     try:
         storage.migrate()
-        commands = storage.admin_commands.claim_pending()
-        publish_commands = [c for c in commands if c.command_type == "publish_request"]
+        # Claim only publish_request commands so other command types are never blocked.
+        publish_commands = storage.admin_commands.claim_pending(command_type="publish_request")
 
         if not publish_commands:
             print(
@@ -391,15 +412,6 @@ def _run_publish_approved(config: Config, dry_run: bool) -> int:
                 )
             )
             return EXIT_OK
-
-        if effective_dry_run:
-            graph: object = NoopGraphClient()
-        else:
-            try:
-                graph = MicrosoftGraphClient.from_env()
-            except GraphAuthError as exc:
-                print(f"Graph auth error: {exc}", file=sys.stderr)
-                return EXIT_RUNTIME_ERROR
 
         results: list[dict[str, Any]] = []
         for cmd in publish_commands:
@@ -441,8 +453,8 @@ def _run_publish_approved(config: Config, dry_run: bool) -> int:
                     draft=draft,
                     storage=storage,
                     graph=graph,  # type: ignore[arg-type]
-                    target_site_id=config.sharepoint.site_id or "",
-                    target_page_library_id=config.sharepoint.page_library_id or "",
+                    target_site_id=target_site_id,
+                    target_page_library_id=target_page_library_id,
                     actor=cmd.requested_by or "system",
                     dry_run=effective_dry_run,
                     correlation_id=cmd.correlation_id or uuid.uuid4().hex,
@@ -457,10 +469,11 @@ def _run_publish_approved(config: Config, dry_run: bool) -> int:
                         "created": result.created,
                     }
                 )
-            except PublishError as exc:
+            except Exception as exc:
+                error_code = "publish_error" if isinstance(exc, PublishError) else "system_error"
                 storage.admin_commands.fail(
                     cmd.command_id,
-                    error_code="publish_error",
+                    error_code=error_code,
                     error_message=str(exc)[:500],
                 )
                 results.append(

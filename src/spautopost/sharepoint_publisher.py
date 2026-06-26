@@ -13,8 +13,10 @@ from __future__ import annotations
 
 import dataclasses
 import hashlib
+import html as _html
 import json
 import urllib.error
+import urllib.parse
 import urllib.request
 import uuid
 from collections.abc import Mapping
@@ -155,7 +157,7 @@ class MicrosoftGraphClient:
                 raw: object = json.loads(resp.read())
                 return raw if isinstance(raw, dict) else {}
         except urllib.error.HTTPError as exc:
-            snippet = exc.read().decode("utf-8", errors="replace")[:200]
+            snippet = exc.read(1000).decode("utf-8", errors="replace")[:200]
             raise PublishError(f"Graph API returned HTTP {exc.code}: {snippet}") from exc
         except urllib.error.URLError as exc:
             raise PublishError(f"Graph API network error: {exc.reason}") from exc
@@ -169,9 +171,10 @@ class MicrosoftGraphClient:
             method="POST",
         )
         try:
-            urllib.request.urlopen(req, timeout=30)  # noqa: S310
+            with urllib.request.urlopen(req, timeout=30):  # noqa: S310
+                pass
         except urllib.error.HTTPError as exc:
-            snippet = exc.read().decode("utf-8", errors="replace")[:200]
+            snippet = exc.read(1000).decode("utf-8", errors="replace")[:200]
             raise PublishError(f"Graph API publish returned HTTP {exc.code}: {snippet}") from exc
         except urllib.error.URLError as exc:
             raise PublishError(f"Graph API publish network error: {exc.reason}") from exc
@@ -185,8 +188,8 @@ class MicrosoftGraphClient:
 def build_page_html(draft: DraftPost) -> str:
     """Build a minimal HTML body for a SharePoint Site Page from a DraftPost."""
     parts: list[str] = []
-    parts.append(f"<h2>概要</h2><p>{_esc(draft.summary_for_users)}</p>")
-    parts.append(f"<h2>影響</h2><p>{_esc(draft.impact)}</p>")
+    parts.append(f"<h2>概要</h2><p>{_esc(draft.summary_for_users).replace(chr(10), '<br />')}</p>")
+    parts.append(f"<h2>影響</h2><p>{_esc(draft.impact).replace(chr(10), '<br />')}</p>")
     if draft.required_actions:
         items = "".join(f"<li>{_esc(a)}</li>" for a in draft.required_actions)
         parts.append(f"<h2>利用者が行う対応</h2><ul>{items}</ul>")
@@ -200,15 +203,21 @@ def build_page_html(draft: DraftPost) -> str:
 
 
 def _ref_item(ref: Mapping[str, str]) -> str:
-    url = _esc(ref.get("url", ""))
+    url = _safe_href(ref.get("url", ""))
     label = _esc(ref.get("label", ref.get("url", "")))
     return f'<li><a href="{url}">{label}</a></li>'
 
 
+def _safe_href(raw_url: str) -> str:
+    """Return an HTML-escaped URL if the scheme is http/https; otherwise '#'."""
+    scheme = urllib.parse.urlparse(raw_url.strip()).scheme.lower()
+    if scheme in {"http", "https"}:
+        return _esc(raw_url.strip())
+    return "#"
+
+
 def _esc(text: str) -> str:
-    return (
-        text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace('"', "&quot;")
-    )
+    return _html.escape(text)
 
 
 # ---------------------------------------------------------------------------
@@ -271,12 +280,6 @@ def publish_approved_draft(
     Raises:
         PublishError: if draft is not approved, or Graph API call fails.
     """
-    if draft.status != "approved":
-        raise PublishError(
-            f"DraftPost {draft.draft_id!r} cannot be published: "
-            f"status={draft.status!r} (expected 'approved')"
-        )
-
     now = datetime.now(UTC)
     corr_id = correlation_id or uuid.uuid4().hex
     idem_key = build_idempotency_key(
@@ -284,6 +287,32 @@ def publish_approved_draft(
         target_site_id=target_site_id,
         target_page_library_id=target_page_library_id,
     )
+
+    # Check idempotency BEFORE validating draft status so that replaying a
+    # publish_request after a successful publish (draft is now "published")
+    # returns the existing Publication instead of raising PublishError.
+    existing = storage.publications.get_by_idempotency_key(idem_key)
+    if existing is not None and existing.publication_status in ("published", "publishing"):
+        audit = _make_audit_event(
+            event_type="publish_result",
+            result="skipped",
+            correlation_id=corr_id,
+            now=now,
+            actor=actor,
+            service_principal=service_principal,
+            draft=draft,
+            pub=existing,
+            idem_key=idem_key,
+        )
+        storage.audit_events.append(audit)
+        return PublishResult(publication=existing, audit_event=audit, created=False)
+
+    # Guard: only approved drafts can be published
+    if draft.status != "approved":
+        raise PublishError(
+            f"DraftPost {draft.draft_id!r} cannot be published: "
+            f"status={draft.status!r} (expected 'approved')"
+        )
 
     initial_operation: PublicationOperation = "dry-run" if dry_run else "create"
     initial_status = "dry_run" if dry_run else "publishing"
@@ -303,7 +332,7 @@ def publish_approved_draft(
 
     pub, created = storage.publications.create_if_absent(initial_pub)
 
-    # Idempotency: already published or in-progress → skip with a skipped audit event
+    # Race-condition guard: concurrent call already reached published/publishing
     if not created and pub.publication_status in ("published", "publishing"):
         audit = _make_audit_event(
             event_type="publish_result",
@@ -353,6 +382,9 @@ def publish_approved_draft(
             sharepoint_page_id=page.page_id,
             published_at=done_now,
             operation="publish",
+            error_code=None,
+            error_message=None,
+            retryable=None,
             updated_at=done_now,
         )
         storage.publications.upsert(published_pub)

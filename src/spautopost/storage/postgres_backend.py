@@ -291,16 +291,31 @@ class _AdminCommandRepository(_Repository):
     def append(self, command: AdminCommand) -> AdminCommand:
         return cast(AdminCommand, self._insert(command, on_conflict_update=False))
 
-    def claim_pending(self, *, limit: int = 100) -> Sequence[AdminCommand]:
+    def claim_pending(
+        self,
+        *,
+        command_type: str | None = None,
+        limit: int = 100,
+    ) -> Sequence[AdminCommand]:
         try:
             with self._conn.cursor() as cur:
-                cur.execute(
-                    f"SELECT * FROM {self._table} "  # noqa: S608
-                    "WHERE status = 'pending' "
-                    f"ORDER BY created_at ASC, command_id ASC LIMIT {_PLACEHOLDER} "
-                    "FOR UPDATE SKIP LOCKED",
-                    (limit,),
-                )
+                if command_type is not None:
+                    cur.execute(
+                        f"SELECT * FROM {self._table} "  # noqa: S608
+                        "WHERE status = 'pending' "
+                        f"AND command_type = {_PLACEHOLDER} "
+                        f"ORDER BY created_at ASC, command_id ASC LIMIT {_PLACEHOLDER} "
+                        "FOR UPDATE SKIP LOCKED",
+                        (command_type, limit),
+                    )
+                else:
+                    cur.execute(
+                        f"SELECT * FROM {self._table} "  # noqa: S608
+                        "WHERE status = 'pending' "
+                        f"ORDER BY created_at ASC, command_id ASC LIMIT {_PLACEHOLDER} "
+                        "FOR UPDATE SKIP LOCKED",
+                        (limit,),
+                    )
                 rows = cur.fetchall()
                 ids = [row["command_id"] for row in rows]
                 if ids:

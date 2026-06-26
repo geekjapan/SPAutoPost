@@ -498,3 +498,134 @@ def test_publish_audit_event_site_info(tmp_path: Path) -> None:
     assert result.audit_event.sharepoint_page_id == "noop-page-id"
     assert result.audit_event.idempotency_key.startswith("pub:")
     storage.close()
+
+
+# ---------------------------------------------------------------------------
+# publish_approved_draft — idempotency replay with published draft
+# ---------------------------------------------------------------------------
+
+
+def test_publish_replay_with_published_draft_returns_existing(tmp_path: Path) -> None:
+    """Replaying publish_request with the already-published draft must not raise."""
+    storage = _build_sqlite_storage(tmp_path)
+    draft = _make_draft()
+    storage.draft_posts.upsert(draft)
+
+    result1 = publish_approved_draft(
+        draft=draft,
+        storage=storage,
+        graph=NoopGraphClient(),
+        target_site_id="site-1",
+        target_page_library_id="lib-1",
+        actor="alice",
+        dry_run=False,
+    )
+
+    # After publish, reload the draft — its status is now "published"
+    published_draft = storage.draft_posts.get(draft.draft_id)
+    assert published_draft is not None
+    assert published_draft.status == "published"
+
+    # Replay with the published draft; idempotency pre-check must return existing
+    result2 = publish_approved_draft(
+        draft=published_draft,
+        storage=storage,
+        graph=NoopGraphClient(),
+        target_site_id="site-1",
+        target_page_library_id="lib-1",
+        actor="alice",
+        dry_run=False,
+    )
+
+    assert result2.created is False
+    assert result2.publication.publication_id == result1.publication.publication_id
+    assert result2.audit_event.result == "skipped"
+    storage.close()
+
+
+def test_publish_success_clears_failure_metadata(tmp_path: Path) -> None:
+    """A retry after a prior failure must not carry stale error_code/error_message."""
+    storage = _build_sqlite_storage(tmp_path)
+    draft = _make_draft()
+    storage.draft_posts.upsert(draft)
+
+    call_count = 0
+
+    class FirstFailThenSucceedClient:
+        def create_news_article(self, *, site_id: str, title: str, html_content: str) -> GraphPage:
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                raise RuntimeError("transient failure")
+            return GraphPage(page_id="retry-page-id")
+
+    # First attempt fails
+    with pytest.raises(PublishError):
+        publish_approved_draft(
+            draft=draft,
+            storage=storage,
+            graph=FirstFailThenSucceedClient(),
+            target_site_id="site-1",
+            target_page_library_id="lib-1",
+            actor="alice",
+            dry_run=False,
+        )
+
+    # Reset draft to approved so the retry is accepted
+    storage.draft_posts.upsert(dataclasses.replace(draft, status="approved"))
+    draft_retried = storage.draft_posts.get(draft.draft_id)
+    assert draft_retried is not None
+
+    result = publish_approved_draft(
+        draft=draft_retried,
+        storage=storage,
+        graph=FirstFailThenSucceedClient(),
+        target_site_id="site-1",
+        target_page_library_id="lib-1",
+        actor="alice",
+        dry_run=False,
+    )
+
+    assert result.publication.publication_status == "published"
+    assert result.publication.error_code is None
+    assert result.publication.error_message is None
+    assert result.publication.retryable is None
+    storage.close()
+
+
+# ---------------------------------------------------------------------------
+# _ref_item / _safe_href — XSS via javascript: URLs
+# ---------------------------------------------------------------------------
+
+
+def test_build_page_html_javascript_url_is_sanitized() -> None:
+    """javascript: URLs in references must not appear in href."""
+    draft = dataclasses.replace(
+        _make_draft(),
+        references=[{"url": "javascript:alert(1)", "label": "evil"}],
+    )
+    html = build_page_html(draft)
+    assert "javascript:" not in html
+    assert 'href="#"' in html
+
+
+def test_build_page_html_https_url_is_preserved() -> None:
+    """Safe https:// URLs in references must be kept in href."""
+    draft = dataclasses.replace(
+        _make_draft(),
+        references=[{"url": "https://example.com/safe", "label": "safe link"}],
+    )
+    html = build_page_html(draft)
+    assert 'href="https://example.com/safe"' in html
+
+
+def test_build_page_html_newlines_become_br() -> None:
+    """Newlines in summary_for_users and impact must be converted to <br />."""
+    draft = dataclasses.replace(
+        _make_draft(),
+        summary_for_users="line1\nline2",
+        impact="a\nb",
+    )
+    html = build_page_html(draft)
+    assert "<br />" in html
+    assert "line1<br />line2" in html

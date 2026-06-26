@@ -287,13 +287,18 @@ class _AdminCommandRepository(_Repository):
     def append(self, command: AdminCommand) -> AdminCommand:
         return cast(AdminCommand, self._insert_or_replace(command, replace=False))
 
-    def claim_pending(self, *, limit: int = 100) -> Sequence[AdminCommand]:
+    def claim_pending(
+        self,
+        *,
+        command_type: str | None = None,
+        limit: int = 100,
+    ) -> Sequence[AdminCommand]:
         if self._tx_state.in_transaction:
-            return self._claim_pending_locked(limit)
+            return self._claim_pending_locked(command_type, limit)
         self._conn.execute("BEGIN IMMEDIATE")
         self._tx_state.in_transaction = True
         try:
-            commands = self._claim_pending_locked(limit)
+            commands = self._claim_pending_locked(command_type, limit)
             self._tx_state.in_transaction = False
             self._conn.commit()
             return commands
@@ -302,12 +307,20 @@ class _AdminCommandRepository(_Repository):
             self._conn.rollback()
             raise
 
-    def _claim_pending_locked(self, limit: int) -> Sequence[AdminCommand]:
-        cur = self._conn.execute(
-            f"SELECT * FROM {self._table} "  # noqa: S608
-            "WHERE status = 'pending' ORDER BY created_at ASC, command_id ASC LIMIT ?",
-            (limit,),
-        )
+    def _claim_pending_locked(self, command_type: str | None, limit: int) -> Sequence[AdminCommand]:
+        if command_type is not None:
+            cur = self._conn.execute(
+                f"SELECT * FROM {self._table} "  # noqa: S608
+                "WHERE status = 'pending' AND command_type = ? "
+                "ORDER BY created_at ASC, command_id ASC LIMIT ?",
+                (command_type, limit),
+            )
+        else:
+            cur = self._conn.execute(
+                f"SELECT * FROM {self._table} "  # noqa: S608
+                "WHERE status = 'pending' ORDER BY created_at ASC, command_id ASC LIMIT ?",
+                (limit,),
+            )
         rows = cur.fetchall()
         ids = [row["command_id"] for row in rows]
         if ids:
