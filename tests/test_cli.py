@@ -346,3 +346,30 @@ def test_preview_draft_invalid_input_returns_three(
 
     assert code == 3
     assert "advisory input validation failed" in capsys.readouterr().err
+
+
+def test_publish_draft_dry_run_records_publication_and_audit(
+    config_dir: Path,
+    valid_environ: dict[str, str],
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    _set_env(monkeypatch, valid_environ)
+    _write_sqlite_config(config_dir, tmp_path / "publish.sqlite3")
+    input_file = tmp_path / "advisory.yaml"
+    _write_advisory(input_file)
+
+    # 既定は dry-run（--no-dry-run なし）→ 外部投稿せず Publication / AuditEvent を記録。
+    code = main(["--config-dir", str(config_dir), "publish-draft", str(input_file)])
+
+    out = capsys.readouterr().out
+    assert code == 0
+    preview = json.loads(out)
+    assert preview["dry_run"] is True
+    assert preview["publication"]["publication_status"] == "dry_run"
+    assert preview["publication"]["operation"] == "dry-run"
+    assert preview["audit_events"][0]["event_type"] == "publish_dry_run"
+    # env: 参照は出力境界で redaction される。
+    assert "env:SPAUTOPOST_SHAREPOINT_SITE_ID" not in out
+    assert "site-xyz" not in out

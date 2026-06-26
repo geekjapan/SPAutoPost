@@ -32,6 +32,13 @@ sharepoint:
   news_promote: false
   idempotency_scope: site-and-page-library
 
+graph:
+  local_poc_auth: delegated
+  hosted_auth: undecided
+  client_id: poc-client-id
+  scopes:
+    - Sites.ReadWrite.All
+
 security:
   block_auto_publish: true
   require_approval: true

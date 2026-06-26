@@ -31,7 +31,7 @@ from .dry_run import (
 )
 from .errors import ConfigValidationError
 from .llm import DraftInput, MockLLMProvider, TargetAudience, Urgency
-from .secrets import redact_config
+from .secrets import is_secret_ref, redact_config, secret_env_name
 
 # dry-run preview の固定方針（draft-composition.md: MVP は mixed / 日本語標準）。
 PREVIEW_AUDIENCE: TargetAudience = "mixed"
@@ -98,6 +98,19 @@ def build_parser() -> argparse.ArgumentParser:
         help="手動 advisory から原稿を生成し、投稿予定 payload と監査イベントを dry-run 表示する",
     )
     preview_draft.add_argument("input_file", type=Path, help="manual advisory YAML / JSON file")
+    publish_draft = sub.add_parser(
+        "publish-draft",
+        help=(
+            "手動 advisory から原稿を生成し SharePoint Site Page へ投稿する"
+            "（既定 dry-run。--no-dry-run で delegated 実投稿）"
+        ),
+    )
+    publish_draft.add_argument("input_file", type=Path, help="manual advisory YAML / JSON file")
+    publish_draft.add_argument(
+        "--promote",
+        action="store_true",
+        help="作成した Site Page を News として publish する（live のみ）",
+    )
     sub.add_parser(
         "run-sample-source-job",
         help="sample source から Advisory と DraftPost を生成して保存する",
@@ -143,6 +156,8 @@ def _dispatch(args: argparse.Namespace, config: Config, dry_run: bool) -> int:
         return _run_import_advisory(args.input_file, dry_run)
     if command == "preview-draft":
         return _run_preview_draft(args.input_file, config)
+    if command == "publish-draft":
+        return _run_publish_draft(args.input_file, config, dry_run, promote=args.promote)
     if command == "run-sample-source-job":
         return _run_sample_source_job(config, dry_run)
     print(f"unknown command: {command}", file=sys.stderr)  # pragma: no cover
@@ -268,6 +283,182 @@ def _print_preview(preview: dict[str, Any]) -> None:
     """preview を Secret / ``env:`` 参照を redaction して JSON 出力する。"""
     redacted = redact_config(preview)
     print(json.dumps(redacted, ensure_ascii=False, indent=2))
+
+
+def _resolve_ref(value: str | None, environ: dict[str, str]) -> str | None:
+    """``env:NAME`` 参照を実環境変数へ解決する（live 投稿で実 ID が必要なため）。"""
+    if value is None:
+        return None
+    if is_secret_ref(value):
+        return environ.get(secret_env_name(value))
+    return value
+
+
+def _run_publish_draft(input_file: Path, config: Config, dry_run: bool, *, promote: bool) -> int:
+    """手動 advisory から原稿を生成し SharePoint Site Page へ投稿する。
+
+    既定は dry-run（実認証・実投稿なし）。``--no-dry-run`` のときだけ delegated device code
+    認証で実投稿する。投稿結果は ``Publication``、経過は ``AuditEvent`` として永続化する。
+    """
+    from .dry_run import audit_event_to_dict, build_site_page_payload
+    from .graph import (
+        DelegatedDeviceCodeAuth,
+        GraphSharePointPagesClient,
+        publish_site_page,
+    )
+    from .graph.auth import GraphTokenProvider
+    from .graph.errors import GraphAuthError
+    from .graph.sharepoint_client import SharePointPagesClient
+    from .storage.errors import StorageError
+    from .storage.factory import build_storage
+    from .storage.models import DraftPost
+
+    try:
+        loaded = load_manual_advisory(input_file)
+    except FileNotFoundError:
+        print(f"advisory input not found: {input_file}", file=sys.stderr)
+        return EXIT_RUNTIME_ERROR
+    except OSError as exc:
+        print(f"advisory input read failed: {exc}", file=sys.stderr)
+        return EXIT_RUNTIME_ERROR
+    except AdvisoryInputError as exc:
+        print("advisory input validation failed:", file=sys.stderr)
+        for issue in exc.issues:
+            print(f"  - {issue}", file=sys.stderr)
+        return EXIT_INPUT_INVALID
+
+    provider = MockLLMProvider(prompt_version=config.llm.prompt_version or DEFAULT_PROMPT_VERSION)
+    metadata = provider.get_provider_metadata()
+    advisory = loaded.advisory
+    urgency = loaded.urgency or DEFAULT_URGENCY
+    draft_input = DraftInput(
+        advisory=_json_ready(asdict(advisory)),
+        target_audience=PREVIEW_AUDIENCE,
+        target_language=PREVIEW_LANGUAGE,
+        urgency=urgency,
+        template_id=PREVIEW_TEMPLATE_ID,
+        prompt_version=config.llm.prompt_version or DEFAULT_PROMPT_VERSION,
+        references=[dict(ref) for ref in advisory.references],
+    )
+    try:
+        draft = provider.generate_draft(draft_input)
+    except Exception as exc:  # noqa: BLE001 - 生成失敗は投稿前なので runtime error として返す
+        print(f"draft generation failed: {exc}", file=sys.stderr)
+        return EXIT_RUNTIME_ERROR
+
+    # live 投稿は実 ID が必要。dry-run は env 参照のまま扱い、出力境界で redaction する。
+    if dry_run:
+        target_site_id = config.sharepoint.site_id
+        target_page_library_id = config.sharepoint.page_library_id
+        token_provider: GraphTokenProvider | None = None
+        client: SharePointPagesClient | None = None
+        client_id = config.graph.client_id
+    else:
+        target_site_id = _resolve_ref(config.sharepoint.site_id, dict(os.environ))
+        target_page_library_id = _resolve_ref(config.sharepoint.page_library_id, dict(os.environ))
+        tenant_id = _resolve_ref(config.sharepoint.tenant_id, dict(os.environ))
+        client_id = _resolve_ref(config.graph.client_id, dict(os.environ))
+        missing = [
+            name
+            for name, value in (
+                ("sharepoint.site_id", target_site_id),
+                ("sharepoint.tenant_id", tenant_id),
+                ("graph.client_id", client_id),
+            )
+            if not value
+        ]
+        if missing:
+            print(
+                "live publish requires resolved values for: " + ", ".join(missing),
+                file=sys.stderr,
+            )
+            return EXIT_CONFIG_INVALID
+        try:
+            token_provider = DelegatedDeviceCodeAuth(
+                tenant_id=tenant_id,  # type: ignore[arg-type]
+                client_id=client_id,  # type: ignore[arg-type]
+                scopes=config.graph.scopes,
+            )
+        except GraphAuthError as exc:
+            print(f"graph auth setup failed: {exc}", file=sys.stderr)
+            return EXIT_CONFIG_INVALID
+        client = GraphSharePointPagesClient()
+
+    if target_site_id is None:  # pragma: no cover - dry-run 経路は config 検証済み
+        print("sharepoint.site_id is not configured", file=sys.stderr)
+        return EXIT_CONFIG_INVALID
+
+    payload = build_site_page_payload(
+        draft,
+        urgency=urgency,
+        target_site_id=target_site_id,
+        target_page_library_id=target_page_library_id,
+        mode=config.sharepoint.mode,
+    )
+
+    try:
+        storage = build_storage(config.storage)
+    except StorageError as exc:
+        print(f"storage init failed: {exc}", file=sys.stderr)
+        return EXIT_RUNTIME_ERROR
+    now = datetime.now(UTC)
+    draft_id = f"draft-{advisory.advisory_id}"
+    draft_post = DraftPost(
+        draft_id=draft_id,
+        title=draft.title,
+        audience=PREVIEW_AUDIENCE,
+        urgency=urgency,
+        summary_for_users=draft.summary_for_users,
+        impact=draft.impact,
+        status="approved",
+        created_at=now,
+        updated_at=now,
+        advisory_id=advisory.advisory_id,
+        advisory_ids=[advisory.advisory_id],
+        required_actions=list(draft.required_actions),
+        admin_actions=list(draft.admin_actions),
+        references=[dict(ref) for ref in draft.references],
+        generated_by_provider=metadata.provider_name,
+        prompt_version=metadata.prompt_version,
+        generation_input_hash=draft.generation_input_hash,
+    )
+    try:
+        storage.migrate()
+        # Publication.draft_id は draft_posts への FK。先に Advisory / DraftPost を保存する。
+        storage.advisories.upsert(advisory)
+        storage.draft_posts.upsert(draft_post)
+        result = publish_site_page(
+            payload,
+            dry_run=dry_run,
+            store=storage,
+            now=now,
+            draft_id=draft_id,
+            title=draft.title,
+            target_site_id=target_site_id,
+            target_page_library_id=target_page_library_id,
+            advisory_ids=[advisory.advisory_id],
+            advisory_id=advisory.advisory_id,
+            provider=metadata,
+            client_id=client_id,
+            token_provider=token_provider,
+            client=client,
+            promote=promote,
+        )
+    except StorageError as exc:
+        print(f"publish failed: {exc}", file=sys.stderr)
+        return EXIT_RUNTIME_ERROR
+    finally:
+        storage.close()
+
+    _print_preview(
+        {
+            "dry_run": result.dry_run,
+            "created": result.created,
+            "publication": _json_ready(asdict(result.publication)),
+            "audit_events": [audit_event_to_dict(event) for event in result.audit_events],
+        }
+    )
+    return EXIT_RUNTIME_ERROR if result.publication.publication_status == "failed" else EXIT_OK
 
 
 def _run_migrate(config: Config, dry_run: bool) -> int:
