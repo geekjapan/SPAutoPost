@@ -2,7 +2,7 @@
 
 ## Status
 
-Decided（Issue #27 で全受け入れ条件を確定）
+Accepted for M0（#27 確定済み）
 
 ## Purpose
 
