@@ -21,6 +21,16 @@ storage:
 llm:
   provider: test_mock # production_api | production_flow | generic_api | test_mock | test_manual
   prompt_version: v1
+  # production_api (Azure OpenAI / Foundry) の場合は azure セクションを設定する。
+  # azure:
+  #   endpoint: https://{resource}.openai.azure.com
+  #   deployment: gpt-4o                     # deployment name または model alias
+  #   api_version: "2024-02-01"              # 省略時このデフォルト値
+  #   auth_type: api_key                     # api_key | managed_identity（M3 は api_key のみ）
+  #   api_key: env:AZURE_OPENAI_API_KEY      # Secret は必ず env: 参照で書く
+  #   timeout_secs: 60
+  #   max_retries: 3
+  #   production_approved: false             # 情報セキュリティ部門承認後に true に変更する
 
 sharepoint:
   mode: site-page # site-page のみ対応（M1）

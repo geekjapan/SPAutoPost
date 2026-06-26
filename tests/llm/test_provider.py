@@ -83,9 +83,7 @@ def test_build_llm_provider_selects_test_mock() -> None:
     assert provider.get_provider_metadata().prompt_version == "v1"
 
 
-@pytest.mark.parametrize(
-    "provider", ["production_api", "production_flow", "generic_api", "test_manual"]
-)
+@pytest.mark.parametrize("provider", ["production_flow", "test_manual"])
 def test_build_llm_provider_rejects_unimplemented_provider_types(provider: str) -> None:
     with pytest.raises(LLMProviderConfigError) as excinfo:
         build_llm_provider(LLMConfig(provider=provider, prompt_version="v1"))
