@@ -6,8 +6,8 @@ graphify-out/
 # Python
 __pycache__/
 *.py[cod]
-.venv/
-venv/
+.venv*/
+venv*/
 *.egg-info/
 build/
 dist/
