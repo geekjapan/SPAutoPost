@@ -242,3 +242,70 @@ def test_import_result_is_frozen() -> None:
     )
     with pytest.raises(AttributeError):
         result.accepted_count = 1  # type: ignore[misc]
+
+
+@pytest.mark.unit
+def test_unsupported_schema_version_raises(tmp_path: Path) -> None:
+    data = {**_VALID_PAYLOAD, "schema_version": "2.0"}
+    path = _make_json(tmp_path, data)
+    storage = _build_storage(tmp_path)
+    with pytest.raises(ExternalCollectorImportError, match="schema_version"):
+        import_from_file(path, storage, now=_NOW)  # type: ignore[arg-type]
+
+
+@pytest.mark.unit
+def test_cve_ids_as_string_instead_of_list_is_rejected(tmp_path: Path) -> None:
+    bad = {**_VALID_ADVISORY, "cve_ids": "CVE-2026-0001"}
+    data = {**_VALID_PAYLOAD, "advisories": [bad]}
+    path = _make_json(tmp_path, data)
+    storage = _build_storage(tmp_path)
+    result = import_from_file(path, storage, now=_NOW)  # type: ignore[arg-type]
+
+    assert result.rejected_count == 1
+    assert "配列" in result.rejected_records[0].reason
+
+
+@pytest.mark.unit
+def test_cve_ids_with_non_string_element_is_rejected(tmp_path: Path) -> None:
+    bad = {**_VALID_ADVISORY, "cve_ids": [123]}
+    data = {**_VALID_PAYLOAD, "advisories": [bad]}
+    path = _make_json(tmp_path, data)
+    storage = _build_storage(tmp_path)
+    result = import_from_file(path, storage, now=_NOW)  # type: ignore[arg-type]
+
+    assert result.rejected_count == 1
+    assert "文字列" in result.rejected_records[0].reason
+
+
+@pytest.mark.unit
+def test_vendor_advisory_ids_as_string_is_rejected(tmp_path: Path) -> None:
+    bad = {**_VALID_ADVISORY, "vendor_advisory_ids": "SA-001"}
+    data = {**_VALID_PAYLOAD, "advisories": [bad]}
+    path = _make_json(tmp_path, data)
+    storage = _build_storage(tmp_path)
+    result = import_from_file(path, storage, now=_NOW)  # type: ignore[arg-type]
+
+    assert result.rejected_count == 1
+    assert "配列" in result.rejected_records[0].reason
+
+
+@pytest.mark.unit
+def test_advisory_id_is_scoped_to_producer(tmp_path: Path) -> None:
+    """異なる producer が同じ advisory_id を持つ場合、SPAutoPost ID が衝突しない。"""
+    payload_a = {**_VALID_PAYLOAD, "producer": "collector-a",
+                 "advisories": [{**_VALID_ADVISORY, "advisory_id": "ADV-001"}]}
+    payload_b = {**_VALID_PAYLOAD, "producer": "collector-b",
+                 "advisories": [{**_VALID_ADVISORY, "advisory_id": "ADV-001"}]}
+
+    path_a = _make_json(tmp_path, payload_a, "a.json")
+    path_b = _make_json(tmp_path, payload_b, "b.json")
+    storage = _build_storage(tmp_path)
+
+    result_a = import_from_file(path_a, storage, now=_NOW)  # type: ignore[arg-type]
+    result_b = import_from_file(path_b, storage, now=_NOW)  # type: ignore[arg-type]
+
+    id_a = result_a.advisories[0].advisory_id
+    id_b = result_b.advisories[0].advisory_id
+    assert id_a != id_b
+    assert "collector-a" in id_a
+    assert "collector-b" in id_b

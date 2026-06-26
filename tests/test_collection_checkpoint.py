@@ -93,3 +93,33 @@ def test_load_with_corrupt_file_returns_none(tmp_path: Path) -> None:
     store = CollectionCheckpointStore(path)
     result = store.load("src")
     assert result is None
+
+
+@pytest.mark.unit
+def test_load_with_non_dict_json_returns_none(tmp_path: Path) -> None:
+    path = tmp_path / "checkpoints.json"
+    path.write_text("[]", encoding="utf-8")
+    store = CollectionCheckpointStore(path)
+    assert store.load("src") is None
+
+
+@pytest.mark.unit
+def test_load_with_non_string_value_returns_none(tmp_path: Path) -> None:
+    import json as _json
+
+    path = tmp_path / "checkpoints.json"
+    path.write_text(_json.dumps({"src": 12345}), encoding="utf-8")
+    store = CollectionCheckpointStore(path)
+    assert store.load("src") is None
+
+
+@pytest.mark.unit
+def test_save_recovers_when_file_contains_non_dict_json(tmp_path: Path) -> None:
+    path = tmp_path / "checkpoints.json"
+    path.write_text("[]", encoding="utf-8")
+    store = CollectionCheckpointStore(path)
+    ts = datetime(2026, 6, 1, tzinfo=UTC)
+    store.save(CollectionCheckpoint(source_name="src", last_collected_at=ts))
+    loaded = store.load("src")
+    assert loaded is not None
+    assert loaded.last_collected_at == ts

@@ -380,3 +380,107 @@ def test_publish_draft_dry_run_records_publication_and_audit(
     # env: 参照は出力境界で redaction される。
     assert "env:SPAUTOPOST_SHAREPOINT_SITE_ID" not in out
     assert "site-xyz" not in out
+
+
+_VALID_EXTERNAL_PAYLOAD = {
+    "schema_version": "1.0",
+    "producer": "test-collector",
+    "generated_at": "2026-06-26T09:00:00Z",
+    "advisories": [
+        {
+            "title": "Test Advisory",
+            "severity": "high",
+            "cve_ids": ["CVE-2026-0001"],
+            "references": [{"label": "Ref", "url": "https://example.com/adv", "type": "vendor"}],
+        }
+    ],
+}
+
+
+def test_import_external_dry_run_does_not_persist(
+    config_dir: Path,
+    valid_environ: dict[str, str],
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    _set_env(monkeypatch, valid_environ)
+    _write_sqlite_config(config_dir, tmp_path / "ext.sqlite3")
+    import_file = tmp_path / "import.json"
+    import_file.write_text(json.dumps(_VALID_EXTERNAL_PAYLOAD), encoding="utf-8")
+
+    code = main(["--config-dir", str(config_dir), "--dry-run", "import-external", str(import_file)])
+
+    out = capsys.readouterr().out
+    assert code == 0
+    result = json.loads(out)
+    assert result["dry_run"] is True
+    assert result["accepted_count"] == 1
+    assert result["rejected_count"] == 0
+
+
+def test_import_external_no_dry_run_persists(
+    config_dir: Path,
+    valid_environ: dict[str, str],
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    _set_env(monkeypatch, valid_environ)
+    _write_sqlite_config(config_dir, tmp_path / "ext.sqlite3")
+    import_file = tmp_path / "import.json"
+    import_file.write_text(json.dumps(_VALID_EXTERNAL_PAYLOAD), encoding="utf-8")
+
+    code = main(
+        ["--config-dir", str(config_dir), "--no-dry-run", "import-external", str(import_file)]
+    )
+
+    out = capsys.readouterr().out
+    assert code == 0
+    result = json.loads(out)
+    assert result["dry_run"] is False
+    assert result["accepted_count"] == 1
+    assert len(result["advisory_ids"]) == 1
+
+
+def test_import_external_invalid_schema_version_returns_three(
+    config_dir: Path,
+    valid_environ: dict[str, str],
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    _set_env(monkeypatch, valid_environ)
+    _write_sqlite_config(config_dir, tmp_path / "ext.sqlite3")
+    bad_payload = {**_VALID_EXTERNAL_PAYLOAD, "schema_version": "9.9"}
+    import_file = tmp_path / "import.json"
+    import_file.write_text(json.dumps(bad_payload), encoding="utf-8")
+
+    code = main(["--config-dir", str(config_dir), "--dry-run", "import-external", str(import_file)])
+
+    assert code == 3
+    assert "import validation failed" in capsys.readouterr().err
+
+
+def test_import_external_missing_file_returns_one(
+    config_dir: Path,
+    valid_environ: dict[str, str],
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    _set_env(monkeypatch, valid_environ)
+    _write_sqlite_config(config_dir, tmp_path / "ext.sqlite3")
+
+    code = main(
+        [
+            "--config-dir",
+            str(config_dir),
+            "--dry-run",
+            "import-external",
+            str(tmp_path / "nonexistent.json"),
+        ]
+    )
+
+    assert code == 1
+    assert "import file not found" in capsys.readouterr().err

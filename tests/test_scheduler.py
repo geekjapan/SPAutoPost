@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from spautopost.scheduler import RunMode, build_job_context
+from spautopost.scheduler import RunMode, build_job_context, current_job_context
 
 
 @pytest.mark.unit
@@ -41,3 +41,16 @@ def test_run_mode_values() -> None:
     manual: RunMode = "manual"
     scheduled: RunMode = "scheduled"
     assert manual != scheduled
+
+
+@pytest.mark.unit
+def test_current_job_context_set_and_reset() -> None:
+    saved = current_job_context.get()
+    ctx = build_job_context("collect")
+    token = current_job_context.set(ctx)
+    try:
+        assert current_job_context.get() is ctx
+        assert current_job_context.get().run_mode == "scheduled"  # type: ignore[union-attr]
+    finally:
+        current_job_context.reset(token)
+    assert current_job_context.get() is saved

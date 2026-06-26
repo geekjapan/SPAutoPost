@@ -22,7 +22,7 @@ import sys
 from collections.abc import Sequence
 
 from .cli import main as cli_main
-from .scheduler import JobContext, build_job_context
+from .scheduler import JobContext, build_job_context, current_job_context
 
 EXIT_UNKNOWN_JOB = 2
 
@@ -58,7 +58,8 @@ def run_job(job: str) -> int:
     except KeyError:
         _print_usage(f"unknown job: {job}")
         return EXIT_UNKNOWN_JOB
-    _context = build_job_context(job)  # noqa: F841 — available for audit logging
+    context = build_job_context(job)
+    current_job_context.set(context)
     return cli_main(argv)
 
 

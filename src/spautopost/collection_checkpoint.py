@@ -38,11 +38,13 @@ class CollectionCheckpointStore:
         if not self._path.exists():
             return None
         try:
-            data: dict[str, str] = json.loads(self._path.read_text(encoding="utf-8"))
+            data = json.loads(self._path.read_text(encoding="utf-8"))
         except (json.JSONDecodeError, OSError):
             return None
+        if not isinstance(data, dict):
+            return None
         raw = data.get(source_name)
-        if raw is None:
+        if not isinstance(raw, str):
             return None
         try:
             ts = datetime.fromisoformat(raw)
@@ -57,9 +59,11 @@ class CollectionCheckpointStore:
         data: dict[str, str] = {}
         if self._path.exists():
             try:
-                data = json.loads(self._path.read_text(encoding="utf-8"))
+                loaded = json.loads(self._path.read_text(encoding="utf-8"))
+                if isinstance(loaded, dict):
+                    data = loaded
             except (json.JSONDecodeError, OSError):
-                data = {}
+                pass
         data[checkpoint.source_name] = checkpoint.last_collected_at.isoformat()
         self._path.parent.mkdir(parents=True, exist_ok=True)
         self._path.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
