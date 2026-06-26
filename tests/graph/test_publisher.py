@@ -12,6 +12,7 @@ from spautopost.errors import PublishGateError
 from spautopost.graph.errors import GraphApiError, GraphAuthError
 from spautopost.graph.publisher import build_idempotency_key, publish_site_page
 from spautopost.llm import ProviderMetadata
+from spautopost.storage.models import Publication
 from spautopost.storage.port import StoragePort
 
 from .conftest import NOW, SECRET_TOKEN, FakePagesClient, FakeTokenProvider
@@ -401,3 +402,187 @@ class TestPublishGate:
             **_common(payload, metadata),  # draft_status="approved"
         )
         assert result.publication.publication_status == "published"
+
+
+# --- state transition tests (Issue #20) ---
+
+
+def test_pending_then_publishing_then_published(
+    store: StoragePort, payload: dict[str, Any], metadata: ProviderMetadata
+) -> None:
+    """live publish は pending→publishing→published と遷移する。"""
+    states_observed: list[str] = []
+
+    class TrackingClient:
+        def __init__(self) -> None:
+            self.update_calls: list[dict[str, Any]] = []
+            self.create_calls: list[dict[str, Any]] = []
+            self.publish_calls: list[dict[str, Any]] = []
+
+        def create_site_page(self, *, site_id: str, request_body: Any, access_token: str) -> Any:
+            from spautopost.graph.sharepoint_client import CreatedPage
+
+            pub = store.publications.list()
+            if pub:
+                states_observed.append(pub[0].publication_status)
+            self.create_calls.append({"site_id": site_id})
+            return CreatedPage(page_id="page-tracking")
+
+        def publish_site_page(self, *, site_id: str, page_id: str, access_token: str) -> None:
+            self.publish_calls.append({})
+
+        def update_site_page(
+            self, *, site_id: str, page_id: str, request_body: Any, access_token: str
+        ) -> None:
+            self.update_calls.append({})
+
+    client = TrackingClient()
+    result = publish_site_page(
+        payload,
+        dry_run=False,
+        store=store,
+        token_provider=FakeTokenProvider(),
+        client=client,
+        **_common(payload, metadata),
+    )
+
+    assert result.publication.publication_status == "published"
+    # API 呼び出し時点で pending か publishing であるべき（pending→publishing 遷移を経る）。
+    assert states_observed and states_observed[0] in ("pending", "publishing")
+
+
+def test_retry_with_existing_page_id_calls_update(
+    store: StoragePort, payload: dict[str, Any], metadata: ProviderMetadata
+) -> None:
+    """failed + sharepoint_page_id ありのリトライ → update_site_page が呼ばれる。"""
+    key = build_idempotency_key(
+        draft_id="draft-1",
+        target_site_id="site-1",
+        target_page_library_id="lib-1",
+        advisory_ids=["adv-1"],
+        title="Example の脆弱性",
+    )
+    failed_pub = Publication(
+        publication_id="pub-failed-1",
+        draft_id="draft-1",
+        target_type="site-page",
+        target_site_id="site-1",
+        target_page_library_id="lib-1",
+        publication_status="failed",
+        idempotency_key=key,
+        sharepoint_page_id="existing-page-123",
+        operation="create",
+        error_code="graph_rate_limited",
+        retryable=True,
+        created_at=NOW,
+        updated_at=NOW,
+    )
+    store.publications.upsert(failed_pub)
+
+    retry_client = FakePagesClient(page_id="page-retry")
+    result = publish_site_page(
+        payload,
+        dry_run=False,
+        store=store,
+        token_provider=FakeTokenProvider(),
+        client=retry_client,
+        **_common(payload, metadata),
+    )
+
+    # update_site_page が呼ばれ、create_site_page は呼ばれない。
+    assert retry_client.update_calls, "update_site_page should have been called"
+    assert retry_client.create_calls == [], "create_site_page should NOT be called on retry"
+    assert result.publication.publication_status == "published"
+    assert result.publication.sharepoint_page_id == "existing-page-123"
+    assert result.publication.operation == "update"
+
+
+def test_retry_without_page_id_calls_create(
+    store: StoragePort, payload: dict[str, Any], metadata: ProviderMetadata
+) -> None:
+    """failed + sharepoint_page_id なしのリトライ → create_site_page が呼ばれる。"""
+    key = build_idempotency_key(
+        draft_id="draft-1",
+        target_site_id="site-1",
+        target_page_library_id="lib-1",
+        advisory_ids=["adv-1"],
+        title="Example の脆弱性",
+    )
+    failed_pub = Publication(
+        publication_id="pub-failed-2",
+        draft_id="draft-1",
+        target_type="site-page",
+        target_site_id="site-1",
+        target_page_library_id="lib-1",
+        publication_status="failed",
+        idempotency_key=key,
+        sharepoint_page_id=None,
+        operation="create",
+        error_code="graph_rate_limited",
+        retryable=True,
+        created_at=NOW,
+        updated_at=NOW,
+    )
+    store.publications.upsert(failed_pub)
+
+    retry_client = FakePagesClient(page_id="page-new")
+    result = publish_site_page(
+        payload,
+        dry_run=False,
+        store=store,
+        token_provider=FakeTokenProvider(),
+        client=retry_client,
+        **_common(payload, metadata),
+    )
+
+    assert retry_client.create_calls, "create_site_page should have been called"
+    assert retry_client.update_calls == [], "update_site_page should NOT be called"
+    assert result.publication.publication_status == "published"
+    assert result.publication.sharepoint_page_id == "page-new"
+    assert result.publication.operation == "create"
+
+
+def test_update_failure_records_failed(
+    store: StoragePort, payload: dict[str, Any], metadata: ProviderMetadata
+) -> None:
+    """update_site_page 失敗時に failed Publication を記録し、例外は伝播しない。"""
+    key = build_idempotency_key(
+        draft_id="draft-1",
+        target_site_id="site-1",
+        target_page_library_id="lib-1",
+        advisory_ids=["adv-1"],
+        title="Example の脆弱性",
+    )
+    failed_pub = Publication(
+        publication_id="pub-failed-3",
+        draft_id="draft-1",
+        target_type="site-page",
+        target_site_id="site-1",
+        target_page_library_id="lib-1",
+        publication_status="failed",
+        idempotency_key=key,
+        sharepoint_page_id="page-to-update",
+        operation="create",
+        error_code="graph_rate_limited",
+        retryable=True,
+        created_at=NOW,
+        updated_at=NOW,
+    )
+    store.publications.upsert(failed_pub)
+
+    update_error = GraphApiError("conflict", status_code=403)
+    retry_client = FakePagesClient(update_error=update_error)
+    result = publish_site_page(
+        payload,
+        dry_run=False,
+        store=store,
+        token_provider=FakeTokenProvider(),
+        client=retry_client,
+        **_common(payload, metadata),
+    )
+
+    assert retry_client.update_calls, "update_site_page should have been called"
+    assert result.publication.publication_status == "failed"
+    assert result.publication.error_code == "authorization_failed"
+    assert result.publication.retryable is False
+    assert result.publication.operation == "update"

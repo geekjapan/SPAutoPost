@@ -37,13 +37,17 @@ class CreatedPage:
 
 @runtime_checkable
 class SharePointPagesClient(Protocol):
-    """Site Page の作成・publish を抽象化する（実 Graph / テスト fake を差し替え可能）。"""
+    """Site Page の作成・更新・publish を抽象化する（実 Graph / テスト fake を差し替え可能）。"""
 
     def create_site_page(
         self, *, site_id: str, request_body: Mapping[str, Any], access_token: str
     ) -> CreatedPage: ...
 
     def publish_site_page(self, *, site_id: str, page_id: str, access_token: str) -> None: ...
+
+    def update_site_page(
+        self, *, site_id: str, page_id: str, request_body: Mapping[str, Any], access_token: str
+    ) -> None: ...
 
 
 def page_name_from_title(title: str) -> str:
@@ -146,6 +150,44 @@ class GraphSharePointPagesClient:
     ) -> None:
         url = f"{self._base_url}/sites/{site_id}/pages/{page_id}/microsoft.graph.sitePage/publish"
         self._post(url, None, access_token)
+
+    def update_site_page(  # pragma: no cover - network
+        self,
+        *,
+        site_id: str,
+        page_id: str,
+        request_body: Mapping[str, Any],
+        access_token: str,
+    ) -> None:
+        url = f"{self._base_url}/sites/{site_id}/pages/{page_id}/microsoft.graph.sitePage"
+        self._patch(url, dict(request_body), access_token)
+
+    def _patch(  # pragma: no cover - network
+        self, url: str, body: Mapping[str, Any], access_token: str
+    ) -> dict[str, Any]:
+        data = json.dumps(body).encode("utf-8")
+        request = urllib.request.Request(  # noqa: S310 - 固定 https Graph endpoint
+            url,
+            data=data,
+            method="PATCH",
+            headers={
+                "Authorization": f"Bearer {access_token}",
+                "Content-Type": "application/json",
+                "Accept": "application/json",
+            },
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=self._timeout) as resp:  # noqa: S310
+                raw = resp.read()
+        except urllib.error.HTTPError as exc:
+            raise GraphApiError(
+                f"graph request failed: HTTP {exc.code}",
+                status_code=exc.code,
+                retryable=exc.code in _RETRYABLE_STATUS,
+            ) from None
+        except urllib.error.URLError:
+            raise GraphApiError("graph request failed: network error", retryable=True) from None
+        return json.loads(raw) if raw else {}
 
     def _post(  # pragma: no cover - network
         self, url: str, body: Mapping[str, Any] | None, access_token: str

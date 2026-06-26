@@ -245,59 +245,130 @@ def publish_site_page(
     if token_provider is None or client is None:
         raise GraphAuthError("live publish requires a token_provider and a pages client")
 
-    created_page_id: str | None = None
+    # リトライ: 既存 failed Publication に sharepoint_page_id があれば UPDATE 経路を選ぶ。
+    # update_page_id が非 None のとき UPDATE 経路、None のとき CREATE 経路。
+    update_page_id: str | None = (
+        existing.sharepoint_page_id
+        if existing is not None
+        and existing.publication_status == "failed"
+        and existing.sharepoint_page_id is not None
+        else None
+    )
+    initial_page_id: str | None = existing.sharepoint_page_id if existing is not None else None
+
+    # pending 状態を記録してから Graph 呼び出しに進む（状態追跡）。
+    pending_pub = _build_publication(
+        publication_id=publication_id,
+        draft_id=draft_id,
+        idempotency_key=key,
+        target_site_id=target_site_id,
+        target_page_library_id=target_page_library_id,
+        status="pending",
+        operation="update" if update_page_id is not None else "create",
+        now=now,
+        sharepoint_page_id=initial_page_id,
+    )
+    store.publications.upsert(pending_pub)
+
+    created_page_id: str | None = initial_page_id
     try:
         auth = token_provider.acquire()
         request_body = build_create_page_request(page_payload)
-        created_page = client.create_site_page(
-            site_id=target_site_id,
-            request_body=request_body,
-            access_token=auth.access_token,
+
+        # token 取得後・API 呼び出し前に publishing 状態へ遷移する。
+        publishing_pub = _build_publication(
+            publication_id=publication_id,
+            draft_id=draft_id,
+            idempotency_key=key,
+            target_site_id=target_site_id,
+            target_page_library_id=target_page_library_id,
+            status="publishing",
+            operation="update" if update_page_id is not None else "create",
+            now=now,
+            sharepoint_page_id=initial_page_id,
         )
-        created_page_id = created_page.page_id
+        store.publications.upsert(publishing_pub)
+
         actor = auth.identity.user_principal_name
-        audits = [
-            _build_audit(
-                event_type="publish_create",
-                result="success",
-                correlation_id=correlation_id,
-                audit_event_id=id_factory(),
-                now=now,
-                operation="create",
-                target_site_id=target_site_id,
-                target_page_library_id=target_page_library_id,
-                actor=actor,
-                service_principal=client_id,
-                sharepoint_page_id=created_page.page_id,
-                provider=provider,
-                advisory_id=advisory_id,
-            )
-        ]
-        operation: PublicationOperation = "create"
-        if promote:
-            client.publish_site_page(
+
+        if update_page_id is not None:
+            # リトライ: 既存ページをコンテンツ更新する。
+            client.update_site_page(
                 site_id=target_site_id,
-                page_id=created_page.page_id,
+                page_id=update_page_id,
+                request_body=request_body,
                 access_token=auth.access_token,
             )
-            operation = "publish"
-            audits.append(
+            operation: PublicationOperation = "update"
+            final_page_id = update_page_id
+            audits = [
                 _build_audit(
-                    event_type="publish_result",
+                    event_type="publish_create",
                     result="success",
                     correlation_id=correlation_id,
                     audit_event_id=id_factory(),
                     now=now,
-                    operation="publish",
+                    operation=operation,
                     target_site_id=target_site_id,
                     target_page_library_id=target_page_library_id,
                     actor=actor,
                     service_principal=client_id,
-                    sharepoint_page_id=created_page.page_id,
+                    sharepoint_page_id=final_page_id,
                     provider=provider,
                     advisory_id=advisory_id,
                 )
+            ]
+        else:
+            created_page = client.create_site_page(
+                site_id=target_site_id,
+                request_body=request_body,
+                access_token=auth.access_token,
             )
+            created_page_id = created_page.page_id
+            operation = "create"
+            final_page_id = created_page.page_id
+            audits = [
+                _build_audit(
+                    event_type="publish_create",
+                    result="success",
+                    correlation_id=correlation_id,
+                    audit_event_id=id_factory(),
+                    now=now,
+                    operation=operation,
+                    target_site_id=target_site_id,
+                    target_page_library_id=target_page_library_id,
+                    actor=actor,
+                    service_principal=client_id,
+                    sharepoint_page_id=final_page_id,
+                    provider=provider,
+                    advisory_id=advisory_id,
+                )
+            ]
+            if promote:
+                client.publish_site_page(
+                    site_id=target_site_id,
+                    page_id=created_page.page_id,
+                    access_token=auth.access_token,
+                )
+                operation = "publish"
+                audits.append(
+                    _build_audit(
+                        event_type="publish_result",
+                        result="success",
+                        correlation_id=correlation_id,
+                        audit_event_id=id_factory(),
+                        now=now,
+                        operation="publish",
+                        target_site_id=target_site_id,
+                        target_page_library_id=target_page_library_id,
+                        actor=actor,
+                        service_principal=client_id,
+                        sharepoint_page_id=created_page.page_id,
+                        provider=provider,
+                        advisory_id=advisory_id,
+                    )
+                )
+
         publication = _build_publication(
             publication_id=publication_id,
             draft_id=draft_id,
@@ -307,7 +378,7 @@ def publish_site_page(
             status="published",
             operation=operation,
             now=now,
-            sharepoint_page_id=created_page.page_id,
+            sharepoint_page_id=final_page_id,
         )
         stored = store.publications.upsert(publication)
         for audit in audits:
@@ -321,6 +392,9 @@ def publish_site_page(
         from .errors import GraphError
 
         error_message = str(exc) if isinstance(exc, GraphError) else "unexpected publish error"
+        failed_operation: PublicationOperation = (
+            "update" if update_page_id is not None else "create"
+        )
         publication = _build_publication(
             publication_id=publication_id,
             draft_id=draft_id,
@@ -328,7 +402,7 @@ def publish_site_page(
             target_site_id=target_site_id,
             target_page_library_id=target_page_library_id,
             status="failed",
-            operation="create",
+            operation=failed_operation,
             now=now,
             sharepoint_page_id=created_page_id,
             error_code=error_code,
@@ -341,7 +415,7 @@ def publish_site_page(
             correlation_id=correlation_id,
             audit_event_id=id_factory(),
             now=now,
-            operation="create",
+            operation=failed_operation,
             target_site_id=target_site_id,
             target_page_library_id=target_page_library_id,
             sharepoint_page_id=created_page_id,
