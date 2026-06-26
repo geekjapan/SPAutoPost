@@ -537,3 +537,22 @@ def test_repeated_dry_run_reuses_existing_publication_id() -> None:
     second = connector.publish_draft(draft)
     assert second.publication.publication_status == "dry_run"
     assert second.publication.publication_id == first_id
+
+
+@pytest.mark.unit
+def test_blank_title_is_rejected() -> None:
+    connector = _connector(_exploding_transport)
+    with pytest.raises(ConnectorError) as exc:
+        connector.publish_draft(_approved_draft(title="   "))
+    assert exc.value.error_code == "required_field_missing"
+
+
+@pytest.mark.unit
+def test_connector_rejects_non_graph_base_url() -> None:
+    with pytest.raises(ValueError, match="known Microsoft Graph host"):
+        SharePointConnector(
+            transport=_exploding_transport,
+            token_provider=lambda: TOKEN,
+            site_id=SITE_ID,
+            base_url="https://attacker.example/v1.0",
+        )

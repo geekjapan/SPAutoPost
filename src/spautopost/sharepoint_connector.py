@@ -45,6 +45,18 @@ CONNECTOR_VERSION = "sharepoint-connector-v1"
 HTTP_TIMEOUT_SECONDS = 30
 APPROVED_STATUSES: frozenset[str] = frozenset({"approved"})
 
+# Canonical Microsoft Graph service roots across all sovereign clouds.
+# The bearer token is ONLY sent to URLs that start with one of these origins,
+# so a misconfigured base_url cannot redirect the token to an attacker host.
+_GRAPH_ALLOWED_ORIGINS: frozenset[str] = frozenset(
+    {
+        "https://graph.microsoft.com/",
+        "https://graph.microsoft.us/",
+        "https://dod-graph.microsoft.us/",
+        "https://microsoftgraph.chinacloudapi.cn/",
+    }
+)
+
 # draft-composition.md の必須セクション順（「対象」は DraftPost に専用 field が無いため除外）。
 _SECTION_HEADINGS: tuple[tuple[str, str], ...] = (
     ("概要", "summary_for_users"),
@@ -130,6 +142,13 @@ class SharePointConnector:
     clock: Clock = _default_clock
     id_factory: IdFactory = _default_id
 
+    def __post_init__(self) -> None:
+        if not any(self.base_url.startswith(origin) for origin in _GRAPH_ALLOWED_ORIGINS):
+            raise ValueError(
+                f"base_url {self.base_url!r} does not start with a known Microsoft Graph host; "
+                "bearer tokens must only be sent to Graph endpoints"
+            )
+
     def publish_draft(
         self,
         draft: DraftPost,
@@ -177,6 +196,11 @@ class SharePointConnector:
             raise ConnectorError(
                 "draft_not_approved",
                 f"draft {draft.draft_id} has status {draft.status!r}; must be approved",
+            )
+        if not isinstance(draft.title, str) or not draft.title.strip():
+            raise ConnectorError(
+                "required_field_missing",
+                f"draft {draft.draft_id} is missing required content for title",
             )
         for heading, attr in _SECTION_HEADINGS:
             value = getattr(draft, attr)
