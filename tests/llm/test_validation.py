@@ -6,7 +6,6 @@ import pytest
 
 from spautopost.llm import DraftOutput, ValidationIssue, ValidationResult, validate_draft_output
 
-
 # ---------------------------------------------------------------------------
 # テストヘルパー
 # ---------------------------------------------------------------------------
@@ -50,7 +49,7 @@ def test_validation_issue_is_frozen_dataclass() -> None:
 
 def test_validation_result_has_errors_true_when_error_issues_present() -> None:
     issue = ValidationIssue(severity="error", code="c1", message="m1")
-    result = validate_draft_output(_make_draft(title=""))
+    result = ValidationResult(issues=(issue,))
     assert result.has_errors is True
 
 
@@ -85,31 +84,41 @@ def test_required_sections_all_present_no_error() -> None:
 
 def test_required_sections_empty_title_raises_error() -> None:
     result = validate_draft_output(_make_draft(title=""))
-    errors = [i for i in result.issues if i.code == "missing_required_section" and i.severity == "error"]
+    errors = [
+        i for i in result.issues if i.code == "missing_required_section" and i.severity == "error"
+    ]
     assert errors, "title が空のとき missing_required_section エラーが発行されること"
 
 
 def test_required_sections_whitespace_only_title_raises_error() -> None:
     result = validate_draft_output(_make_draft(title="   "))
-    errors = [i for i in result.issues if i.code == "missing_required_section" and i.severity == "error"]
+    errors = [
+        i for i in result.issues if i.code == "missing_required_section" and i.severity == "error"
+    ]
     assert errors
 
 
 def test_required_sections_empty_summary_raises_error() -> None:
     result = validate_draft_output(_make_draft(summary_for_users=""))
-    errors = [i for i in result.issues if i.code == "missing_required_section" and i.severity == "error"]
+    errors = [
+        i for i in result.issues if i.code == "missing_required_section" and i.severity == "error"
+    ]
     assert errors
 
 
 def test_required_sections_empty_impact_raises_error() -> None:
     result = validate_draft_output(_make_draft(impact=""))
-    errors = [i for i in result.issues if i.code == "missing_required_section" and i.severity == "error"]
+    errors = [
+        i for i in result.issues if i.code == "missing_required_section" and i.severity == "error"
+    ]
     assert errors
 
 
 def test_required_sections_empty_required_actions_raises_error() -> None:
     result = validate_draft_output(_make_draft(required_actions=()))
-    errors = [i for i in result.issues if i.code == "missing_required_section" and i.severity == "error"]
+    errors = [
+        i for i in result.issues if i.code == "missing_required_section" and i.severity == "error"
+    ]
     assert errors
 
 
@@ -149,7 +158,9 @@ def test_unsupported_claim_check_suppressed_when_guardrail_set() -> None:
 def test_unsupported_claim_check_emits_warning_when_no_guardrail_and_no_warnings() -> None:
     draft = _make_draft(validation_hints=(), warnings=())
     result = validate_draft_output(draft)
-    found = [i for i in result.issues if i.code == "unsupported_claim_risk" and i.severity == "warning"]
+    found = [
+        i for i in result.issues if i.code == "unsupported_claim_risk" and i.severity == "warning"
+    ]
     assert found
 
 
@@ -187,7 +198,9 @@ def test_dangerous_detail_not_detected_for_clean_draft() -> None:
 def test_dangerous_detail_detected_in_various_fields(field_name: str, value: object) -> None:
     draft = _make_draft(**{field_name: value})
     result = validate_draft_output(draft)
-    errors = [i for i in result.issues if i.code == "dangerous_detail_detected" and i.severity == "error"]
+    errors = [
+        i for i in result.issues if i.code == "dangerous_detail_detected" and i.severity == "error"
+    ]
     assert errors, f"{field_name} に危険パターンが検出されること"
     assert errors[0].reviewer_hint is not None
 
@@ -257,7 +270,11 @@ def test_reviewer_warnings_empty_when_no_hints() -> None:
 
 
 def test_import_from_llm_package() -> None:
-    from spautopost.llm import ValidationIssue, ValidationResult, validate_draft_output  # noqa: F401
+    from spautopost.llm import (  # noqa: F401
+        ValidationIssue,
+        ValidationResult,
+        validate_draft_output,
+    )
 
 
 def test_validate_draft_output_returns_validation_result() -> None:
