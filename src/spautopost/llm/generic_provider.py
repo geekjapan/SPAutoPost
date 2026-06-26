@@ -282,14 +282,24 @@ def _safe_advisory(advisory: object) -> dict[str, object]:
     return {}
 
 
-_REQUIRED_DRAFT_FIELDS = frozenset({"title", "summary_for_users", "impact", "required_actions"})
+_REQUIRED_DRAFT_FIELDS = frozenset({"title", "summary_for_users", "impact"})
+_REQUIRED_SEQUENCE_FIELDS = frozenset({"required_actions"})
 
 
 def _validate_draft_fields(data: dict[str, Any]) -> None:
     missing = [f for f in _REQUIRED_DRAFT_FIELDS if f not in data or data[f] is None]
-    if missing:
+    # required_actions must be a list/sequence so _build_draft_output._seq() can use it
+    bad_type = [
+        f
+        for f in _REQUIRED_SEQUENCE_FIELDS
+        if f not in data
+        or data[f] is None
+        or isinstance(data[f], str | bytes | bytearray)
+        or not isinstance(data[f], Sequence)
+    ]
+    if missing or bad_type:
         raise LLMProviderError(
-            f"LLM response missing required fields: {sorted(missing)}",
+            f"LLM response missing or invalid required fields: {sorted(missing + bad_type)}",
             retryable=False,
         )
 

@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import os
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
@@ -353,6 +354,15 @@ def _validate_llm(raw: Mapping[str, Any], issues: list[str]) -> LLMConfig:
     if provider == "generic_api":
         if not endpoint_url:
             issues.append("llm.endpoint_url is required when llm.provider=generic_api")
+        else:
+            if endpoint_url.startswith("env:"):
+                resolved_url = os.environ.get(endpoint_url[len("env:") :], "")
+            else:
+                resolved_url = endpoint_url
+            if resolved_url and not resolved_url.startswith("https://"):
+                issues.append(
+                    "llm.endpoint_url must use https:// to protect Bearer token in transit"
+                )
         if not model:
             issues.append("llm.model is required when llm.provider=generic_api")
         if not auth_env_var:
