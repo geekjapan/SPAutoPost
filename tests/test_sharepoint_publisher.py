@@ -571,8 +571,10 @@ def test_publish_success_clears_failure_metadata(tmp_path: Path) -> None:
             dry_run=False,
         )
 
-    # Reset draft to approved so the retry is accepted
-    storage.draft_posts.upsert(dataclasses.replace(draft, status="approved"))
+    # Reset the persisted failed draft to approved so the retry mirrors production state
+    failed_draft = storage.draft_posts.get(draft.draft_id)
+    assert failed_draft is not None
+    storage.draft_posts.upsert(dataclasses.replace(failed_draft, status="approved"))
     draft_retried = storage.draft_posts.get(draft.draft_id)
     assert draft_retried is not None
 

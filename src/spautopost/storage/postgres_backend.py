@@ -32,6 +32,7 @@ from .migrate import DEFAULT_MIGRATIONS_ROOT, run_migrations
 from .migrate import pending_migrations as _pending_migrations
 from .models import (
     AdminCommand,
+    AdminCommandType,
     Advisory,
     AuditEvent,
     DraftPost,
@@ -294,7 +295,7 @@ class _AdminCommandRepository(_Repository):
     def claim_pending(
         self,
         *,
-        command_type: str | None = None,
+        command_type: AdminCommandType | None = None,
         limit: int = 100,
     ) -> Sequence[AdminCommand]:
         try:

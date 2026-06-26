@@ -29,6 +29,7 @@ from .migrate import DEFAULT_MIGRATIONS_ROOT, run_migrations
 from .migrate import pending_migrations as _pending_migrations
 from .models import (
     AdminCommand,
+    AdminCommandType,
     Advisory,
     AuditEvent,
     DraftPost,
@@ -290,7 +291,7 @@ class _AdminCommandRepository(_Repository):
     def claim_pending(
         self,
         *,
-        command_type: str | None = None,
+        command_type: AdminCommandType | None = None,
         limit: int = 100,
     ) -> Sequence[AdminCommand]:
         if self._tx_state.in_transaction:
@@ -307,7 +308,9 @@ class _AdminCommandRepository(_Repository):
             self._conn.rollback()
             raise
 
-    def _claim_pending_locked(self, command_type: str | None, limit: int) -> Sequence[AdminCommand]:
+    def _claim_pending_locked(
+        self, command_type: AdminCommandType | None, limit: int
+    ) -> Sequence[AdminCommand]:
         if command_type is not None:
             cur = self._conn.execute(
                 f"SELECT * FROM {self._table} "  # noqa: S608
