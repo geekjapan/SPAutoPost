@@ -32,7 +32,7 @@ LLM 変換は行わず、直接 field 写像のみ実施しなければならな
 #### Scenario: Markdown と metadata が揃っている場合
 - **WHEN** `normalize(document)` を呼び出し `raw_payload` に `markdown` と `metadata.title`・`metadata.sourceURL` が含まれる
 - **THEN** `Advisory.title` は `metadata.title` の値である
-- **THEN** `Advisory.summary` は Markdown テキスト（先頭 500 文字）である
+- **THEN** `Advisory.summary` は Markdown テキスト（先頭 5000 文字）である
 - **THEN** `Advisory.references` に `{"label": "Source", "url": source_url, "type": "web_scrape"}` が含まれる
 - **THEN** `Advisory.severity` は `"unknown"` である
 - **THEN** `Advisory.tags` に `"firecrawl"` が含まれる

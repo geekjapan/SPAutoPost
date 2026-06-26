@@ -238,6 +238,8 @@ retry policy:
 
 SourceType: `"web_scrape"`
 
+スキーママイグレーション: `db/migrations/*/0002_add_web_scrape_source_type.sql` にて `source_records.source_type` の CHECK 制約に `'web_scrape'` を追加済み。
+
 実装: `src/spautopost/firecrawl_adapter.py`、依存: `firecrawl-py>=4.0`（`[spike]` extra）
 
 設定項目:
@@ -266,4 +268,4 @@ SourceType: `"web_scrape"`
 - #12 Implement MyJVN adapter
 - #13 Define KEV and vendor advisory adapter interface
 - #21 Add scheduler and external collector import boundary
-- #34 [Spike] Evaluate Firecrawl source adapter
+- #34 Spike: Evaluate Firecrawl source adapter

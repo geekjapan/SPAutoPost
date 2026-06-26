@@ -18,8 +18,19 @@ import os
 import sys
 from datetime import UTC, datetime
 
-MAX_CONTENT_CHARS = int(os.environ.get("FIRECRAWL_MAX_CONTENT_CHARS", "5000"))
-TIMEOUT_MS = int(os.environ.get("FIRECRAWL_TIMEOUT_SECONDS", "30")) * 1000
+
+def _read_int_env(name: str, default: int) -> int:
+    raw = os.environ.get(name)
+    if raw is None:
+        return default
+    try:
+        return int(raw)
+    except ValueError as exc:
+        raise SystemExit(f"[ERROR] {name} must be an integer, got {raw!r}.") from exc
+
+
+MAX_CONTENT_CHARS = _read_int_env("FIRECRAWL_MAX_CONTENT_CHARS", 5000)
+TIMEOUT_MS = _read_int_env("FIRECRAWL_TIMEOUT_SECONDS", 30) * 1000
 
 
 def main() -> None:

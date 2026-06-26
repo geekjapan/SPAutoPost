@@ -31,6 +31,17 @@ _DEFAULT_MAX_CHARS = 5000
 _DEFAULT_TIMEOUT_MS = 30_000
 
 
+def _read_int_env(name: str, default: int) -> int:
+    """環境変数を整数として読む。未設定時はデフォルト値、非整数値は SourceAdapterError。"""
+    raw = os.environ.get(name)
+    if raw is None:
+        return default
+    try:
+        return int(raw)
+    except ValueError as exc:
+        raise SourceAdapterError(f"{name} must be an integer, got {raw!r}") from exc
+
+
 class FirecrawlSourceAdapter:
     """Firecrawl API を使った URL → Markdown 取得の spike adapter。"""
 
@@ -48,12 +59,12 @@ class FirecrawlSourceAdapter:
         self._max_content_chars = (
             max_content_chars
             if max_content_chars is not None
-            else int(os.environ.get("FIRECRAWL_MAX_CONTENT_CHARS", str(_DEFAULT_MAX_CHARS)))
+            else _read_int_env("FIRECRAWL_MAX_CONTENT_CHARS", _DEFAULT_MAX_CHARS)
         )
         self._timeout_ms = (
             timeout_ms
             if timeout_ms is not None
-            else int(os.environ.get("FIRECRAWL_TIMEOUT_SECONDS", "30")) * 1000
+            else _read_int_env("FIRECRAWL_TIMEOUT_SECONDS", 30) * 1000
         )
 
     def validate_config(self) -> AdapterStatus:
