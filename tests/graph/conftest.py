@@ -44,11 +44,19 @@ class FakeTokenProvider:
 class FakePagesClient:
     """SharePoint pages クライアントの fake。呼び出しを記録し、任意で例外を投げる。"""
 
-    def __init__(self, *, page_id: str = "page-abc", create_error: Exception | None = None) -> None:
+    def __init__(
+        self,
+        *,
+        page_id: str = "page-abc",
+        create_error: Exception | None = None,
+        update_error: Exception | None = None,
+    ) -> None:
         self.page_id = page_id
         self.create_error = create_error
+        self.update_error = update_error
         self.create_calls: list[dict[str, Any]] = []
         self.publish_calls: list[dict[str, Any]] = []
+        self.update_calls: list[dict[str, Any]] = []
 
     def create_site_page(
         self, *, site_id: str, request_body: Mapping[str, Any], access_token: str
@@ -62,6 +70,15 @@ class FakePagesClient:
 
     def publish_site_page(self, *, site_id: str, page_id: str, access_token: str) -> None:
         self.publish_calls.append({"site_id": site_id, "page_id": page_id})
+
+    def update_site_page(
+        self, *, site_id: str, page_id: str, request_body: Mapping[str, Any], access_token: str
+    ) -> None:
+        self.update_calls.append(
+            {"site_id": site_id, "page_id": page_id, "request_body": dict(request_body)}
+        )
+        if self.update_error is not None:
+            raise self.update_error
 
 
 @pytest.fixture
