@@ -23,7 +23,8 @@ SPAutoPost は SharePoint お知らせ掲示板への投稿に SharePoint Site P
 SPAutoPost が使用する Microsoft Graph 権限は以下の最小権限セットでなければならない（SHALL）。
 
 - Azure hosted runtime（application permission）:
-  - `Sites.Selected`（推奨）または `Sites.ReadWrite.All`（初期セットアップ暫定）
+  - `Sites.ReadWrite.All`（Graph v1.0 ドキュメントで明示された最小権限）
+  - `Sites.Selected`（推奨候補・未検証。site page 操作での動作確認は #27 に委ねる）
 - ローカル PoC（delegated permission）:
   - `Sites.ReadWrite.All`
 
@@ -66,7 +67,7 @@ security:
 
 ### Requirement: 下書き作成のみ行い SPAutoPost からの公開は M1 非対象とする
 
-M1 では SPAutoPost は SharePoint Site Page を下書き（`draft`）状態で作成しなければならない（SHALL）。SPAutoPost から `publish` エンドポイント（`/sites/{siteId}/pages/{pageId}/publish`）を呼ぶことは M1 では禁止する（SHALL NOT）。
+M1 では SPAutoPost は SharePoint Site Page を下書き（`draft`）状態で作成しなければならない（SHALL）。SPAutoPost から `publish` エンドポイント（`/sites/{siteId}/pages/{pageId}/microsoft.graph.sitePage/publish`）を呼ぶことは M1 では禁止する（SHALL NOT）。
 
 公開は SharePoint 画面から管理者が手動で行う、または SharePoint 側の承認フローに委ねる。
 

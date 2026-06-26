@@ -90,11 +90,10 @@ Microsoft Graph 権限は最小権限とします。
 
 | Permission | 用途 | 種別 |
 |---|---|---|
-| `Sites.Selected` | 対象 site への限定アクセス（推奨） | Application |
-| `Sites.ReadWrite.All` | 初期セットアップ暫定（`Sites.Selected` 移行まで） | Application |
-| `Files.ReadWrite.All` | page library への書き込みが必要な場合 | Application |
+| `Sites.ReadWrite.All` | Site Page 作成の文書化された最小権限（`POST /sites/{siteId}/pages`） | Application |
+| `Sites.Selected` | サイト限定アクセス（推奨候補・要検証。site page 操作での動作は #27 で確認） | Application |
 
-`Sites.Selected` を推奨します。`Sites.ReadWrite.All` は `Sites.Selected` の設定が完了するまでの暫定です。
+`Sites.ReadWrite.All` が Graph v1.0 ドキュメントで明示されている最小権限。`Sites.Selected` はサイト限定アクセスとして推奨候補だが、site page 操作（`POST /sites/{siteId}/pages`）での動作確認は #27 に委ねる（未検証）。本番確定まで `Sites.ReadWrite.All` を使用する。`Files.ReadWrite.All` は M1 では不要（添付・画像は M1 非対象）。
 
 ### ローカル PoC（delegated permission）
 
@@ -133,7 +132,7 @@ pending → publishing → published（下書きページ作成完了、SharePoi
 
 ### M1 の公開方針
 
-- SPAutoPost は Graph API publish エンドポイント（`/sites/{siteId}/pages/{pageId}/publish`）を M1 では呼び出しません。
+- SPAutoPost は Graph API publish エンドポイント（`/sites/{siteId}/pages/{pageId}/microsoft.graph.sitePage/publish`）を M1 では呼び出しません。
 - 公開は SharePoint 画面から管理者が手動で行うか、SharePoint 側の承認フローに委ねます。
 - `news_promote: false` が設定されている場合、News promote エンドポイントは呼び出されません。
 - ログに `publish skipped (M1)` が記録されます。
