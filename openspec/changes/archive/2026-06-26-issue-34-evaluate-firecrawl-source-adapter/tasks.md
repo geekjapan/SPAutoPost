@@ -33,5 +33,5 @@
 ## 6. OpenSpec アーカイブと PR
 
 - [x] 6.1 `openspec validate issue-34-evaluate-firecrawl-source-adapter --strict` を実行し、全項目パスすることを確認する
-- [ ] 6.2 `opsx:archive` で change をアーカイブし、main specs を更新する
-- [ ] 6.3 PR を作成する（base: main、タイトル: `feat(spike): evaluate Firecrawl source adapter (#34)`）
+- [x] 6.2 `opsx:archive` で change をアーカイブし、main specs を更新する
+- [x] 6.3 PR を作成する（base: main、タイトル: `feat(spike): evaluate Firecrawl source adapter (#34)`）
