@@ -76,7 +76,9 @@ Azure Container Apps / Jobs で利用する managed identity です。
 - Container Apps App と Container Apps Jobs で同一の user-assigned managed identity を共有する。
 - system-assigned managed identity は採用しない（resource 単位で identity が分散するため）。
 - Secret を持たない運用を実現する。
-- `azure-identity` の `ManagedIdentityCredential` または `DefaultAzureCredential` で実装する。
+- `azure-identity` の `ManagedIdentityCredential(client_id=<UAMI_CLIENT_ID>)` で実装し、UAMI の client ID を明示的に指定する。`client_id` を省略すると system-assigned identity にフォールバックするため省略禁止。
+- `DefaultAzureCredential` は Graph 認証に使用しない。`DefaultAzureCredential` は環境変数のサービスプリンシパル（`AZURE_CLIENT_ID` / `AZURE_CLIENT_SECRET`）を managed identity より先に試みるため、app-only fallback の環境変数が設定されている場合に誤った identity で Graph を呼び出す。
+- UAMI の client ID は設定ファイルまたは環境変数から取得し、コードに直書きしない。
 - M1 で `Sites.Selected` permission の付与可否を検証する。
 
 ### Azure hosted runtime fallback: Application permission / app-only access
@@ -115,6 +117,8 @@ Azure Container Apps / Jobs で利用する managed identity です。
 |---|---|---|
 | `Sites.Selected` | Application | 対象 site への読み書きスコープ限定（推奨） |
 | `Pages.ReadWrite.All` | Application | Site Page / News 記事の作成・更新（Sites.Selected 対応状況による、M1 検証） |
+
+**Sites.Selected の追加手順**: `Sites.Selected` を Entra アプリ permission として付与するだけではどの site にもアクセスできない。アプリに `Sites.Selected` を付与した後、`POST /sites/{siteid}/permissions` で対象 site に対するロール（例: `write`）を個別に割り当てる必要がある（[Microsoft Docs: selected permissions overview](https://learn.microsoft.com/en-us/graph/permissions-selected-overview)）。M1 では managed identity への `Sites.Selected` 付与と、`sharepoint.site_id` に対する per-site grant の両方を検証する。
 
 **M1 で確認すること**: `Sites.Selected` + `Pages.ReadWrite.All`（Application）の組み合わせで Site Page / News の作成・更新・公開が可能か。`Pages.ReadWrite.All` が site page 作成に対応していない場合（Microsoft Docs では `Sites.ReadWrite.All` が application permission として記載されている）、`Sites.ReadWrite.All` を例外的に採用し decision record に理由を記録する。**注意**: `Sites.ReadWrite.All` は tenant 全体に有効な permission であり、`Sites.Selected` を同時に付与しても `Sites.ReadWrite.All` のスコープは限定されない。`Sites.ReadWrite.All` フォールバック採用時の補完制御として、アプリケーションレベルで投稿先を `sharepoint.site_id` に限定し、すべての Graph 呼び出しを audit log に記録することを必須とする。
 
