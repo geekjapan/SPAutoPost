@@ -6,6 +6,9 @@ import json
 from dataclasses import asdict
 from typing import Any
 
+import pytest
+
+from spautopost.errors import PublishGateError
 from spautopost.graph.errors import GraphApiError, GraphAuthError
 from spautopost.graph.publisher import build_idempotency_key, publish_site_page
 from spautopost.llm import ProviderMetadata
@@ -24,6 +27,7 @@ def _ids() -> str:
 def _common(payload: dict[str, Any], metadata: ProviderMetadata) -> dict[str, Any]:
     return dict(
         draft_id="draft-1",
+        draft_status="approved",
         title="Example の脆弱性",
         target_site_id="site-1",
         target_page_library_id="lib-1",
@@ -312,3 +316,88 @@ def test_idempotency_key_deterministic_and_target_sensitive() -> None:
     # 投稿先が違えば別キー。
     key_other_site = build_idempotency_key(**{**base, "target_site_id": "site-2"})
     assert key_other_site != key_a
+
+
+# --- publish gate tests ---
+
+
+class TestPublishGate:
+    @pytest.mark.parametrize(
+        "status",
+        [
+            "created",
+            "generated",
+            "review_requested",
+            "reviewed",
+            "rejected",
+            "regeneration_requested",
+            "publishing",
+            "published",
+            "failed",
+            "cancelled",
+        ],
+    )
+    def test_non_approved_draft_raises_before_any_storage_write(
+        self, store: StoragePort, payload: dict[str, Any], metadata: ProviderMetadata, status: str
+    ) -> None:
+        client = FakePagesClient()
+        token = FakeTokenProvider()
+        with pytest.raises(PublishGateError) as exc_info:
+            publish_site_page(
+                payload,
+                dry_run=False,
+                store=store,
+                token_provider=token,
+                client=client,
+                draft_id="draft-1",
+                draft_status=status,  # type: ignore[arg-type]
+                title="Test",
+                target_site_id="site-1",
+                target_page_library_id="lib-1",
+                advisory_ids=[],
+                advisory_id=None,
+                provider=metadata,
+                client_id="poc-client-id",
+                now=NOW,
+                id_factory=_ids,
+            )
+        assert exc_info.value.actual_status == status
+        # Storage には何も書かれていない。
+        assert store.publications.list() == []
+        assert store.audit_events.list() == []
+        assert client.create_calls == []
+        assert token.calls == 0
+
+    def test_dry_run_non_approved_also_raises(
+        self, store: StoragePort, payload: dict[str, Any], metadata: ProviderMetadata
+    ) -> None:
+        with pytest.raises(PublishGateError):
+            publish_site_page(
+                payload,
+                dry_run=True,
+                store=store,
+                draft_id="draft-1",
+                draft_status="review_requested",
+                title="Test",
+                target_site_id="site-1",
+                target_page_library_id="lib-1",
+                advisory_ids=[],
+                advisory_id=None,
+                provider=metadata,
+                client_id="poc-client-id",
+                now=NOW,
+                id_factory=_ids,
+            )
+
+    def test_approved_live_passes_gate(
+        self, store: StoragePort, payload: dict[str, Any], metadata: ProviderMetadata
+    ) -> None:
+        result = publish_site_page(
+            payload,
+            dry_run=False,
+            store=store,
+            token_provider=FakeTokenProvider(),
+            client=FakePagesClient(),
+            **_common(payload, metadata),  # draft_status="approved"
+        )
+        assert result.publication.publication_status == "published"

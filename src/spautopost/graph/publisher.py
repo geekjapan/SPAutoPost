@@ -22,9 +22,11 @@ from dataclasses import dataclass
 from datetime import datetime
 
 from ..llm import ProviderMetadata
+from ..review_workflow import assert_publishable
 from ..storage.models import (
     AuditEvent,
     AuditEventType,
+    DraftStatus,
     Publication,
     PublicationOperation,
     TargetType,
@@ -177,6 +179,7 @@ def publish_site_page(
     store: StoragePort,
     now: datetime,
     draft_id: str,
+    draft_status: DraftStatus,
     title: str,
     target_site_id: str,
     target_page_library_id: str | None = None,
@@ -195,6 +198,8 @@ def publish_site_page(
     live（``dry_run=False``）では ``token_provider`` と ``client`` が必須。失敗は捕捉して
     ``failed`` Publication と ``error`` AuditEvent に記録し、例外は伝播させない。
     """
+    assert_publishable(draft_id=draft_id, draft_status=draft_status)
+
     correlation_id = id_factory()
     key = build_idempotency_key(
         draft_id=draft_id,
