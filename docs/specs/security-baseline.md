@@ -57,9 +57,9 @@ Approved
 
 ## LLM Input Control
 
-LLM provider に渡す入力は最小化します。
+LLM provider に渡す入力は最小化します。詳細な許可リスト / 禁止リストは `docs/specs/llm-provider.md`「LLM 入力制限」セクションを正本とします。
 
-渡してよい情報:
+渡してよい情報（概要）:
 
 - 公開された脆弱性情報
 - CVE / JVN / vendor advisory の要約
@@ -67,15 +67,15 @@ LLM provider に渡す入力は最小化します。
 - 一般化された社内向け文体指示
 - 明示的に許可された製品名またはカテゴリ
 
-原則渡さない情報:
+原則渡さない情報（概要）:
 
-- Secret
-- 個人情報
-- 社内ネットワーク構成
-- 内部 IP / hostname
+- Secret / API key / token
+- 個人情報（PII）
+- 社内ネットワーク構成（内部 IP / hostname 等）
 - 認証方式の詳細
 - 未公開インシデント情報
 - 攻撃者に有益な内部防御状況
+- 攻撃手順・PoC 詳細・悪用手法
 
 ## Output Safety
 
