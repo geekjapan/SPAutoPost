@@ -26,7 +26,7 @@ Spike 評価結果（各 provider の M1/M3 判断、採用可否根拠）は `d
 
 #### Scenario: ADR に M1 スコープが反映される
 - **WHEN** Spike 評価完了後に ADR を更新する
-- **THEN** ADR の Consequences セクションに「M1: mock provider のみ必須。Azure OpenAI / generic API は M3 以降。test_manual は手動取込のみ許可」と記載されていること
+- **THEN** ADR の Consequences セクションに「M1: mock provider のみ必須。Azure OpenAI / Foundry / generic API は M3 以降。test_manual は手動取込のみ許可」と記載されていること
 
 ### Requirement: M1/M3 decision not blocked by missing API credentials
 Spike 評価は、Azure OpenAI / Foundry の API 資格情報または本番環境アクセスなしに完了できなければならない（SHALL）。評価は公開ドキュメント・利用条件・既知の認証方式情報に基づき実施する。
