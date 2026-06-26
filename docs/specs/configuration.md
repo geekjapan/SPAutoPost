@@ -78,7 +78,7 @@ sources:
 
 graph:
   local_poc_auth: delegated
-  hosted_auth: undecided
+  hosted_auth: managed_identity # user-assigned managed identity（#27 確定）、fallback は app_only
 
 security:
   block_auto_publish: true

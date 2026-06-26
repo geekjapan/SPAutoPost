@@ -36,7 +36,7 @@ SourceRecord
 必須項目:
 
 - source_record_id: string
-- source_type: manual | nvd | myjvn | kev | vendor | rss | external_collector
+- source_type: manual | nvd | myjvn | kev | vendor | rss | external_collector | web_scrape
 - source_name: string
 - source_url: string optional
 - retrieved_at: datetime
