@@ -116,7 +116,10 @@ class GenericApiLLMProvider:
             issues.append("llm.endpoint_url is required for generic_api provider")
         else:
             if is_secret_ref(endpoint):
-                endpoint = os.environ.get(secret_env_name(endpoint), "")
+                env_name = secret_env_name(endpoint)
+                endpoint = os.environ.get(env_name, "")
+                if not endpoint:
+                    issues.append(f"llm.endpoint_url env var {env_name!r} is not set")
             if endpoint and not endpoint.startswith("https://"):
                 issues.append(
                     "llm.endpoint_url must use https:// to protect Bearer token in transit"

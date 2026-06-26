@@ -113,6 +113,15 @@ class TestValidateConfig:
         assert status.valid is False
         assert any("https" in issue for issue in status.issues)
 
+    def test_env_ref_endpoint_url_unset_returns_invalid(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.delenv("LLM_ENDPOINT", raising=False)
+        provider = GenericApiLLMProvider(_config(endpoint_url="env:LLM_ENDPOINT"))
+        status = provider.validate_config()
+        assert status.valid is False
+        assert any("LLM_ENDPOINT" in issue for issue in status.issues)
+
     def test_status_metadata_has_correct_provider_type(self) -> None:
         provider = GenericApiLLMProvider(_config())
         status = provider.validate_config()
