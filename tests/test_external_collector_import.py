@@ -342,3 +342,55 @@ def test_advisory_id_no_collision_with_delimiter_ambiguity(tmp_path: Path) -> No
     id_a = result_a.advisories[0].advisory_id
     id_b = result_b.advisories[0].advisory_id
     assert id_a != id_b
+
+
+@pytest.mark.unit
+def test_fallback_advisory_id_stable_across_ordering(tmp_path: Path) -> None:
+    """advisory_id 省略時、ファイル内の並び順が変わっても same advisory_id を得る。"""
+    adv_a = _VALID_ADVISORY
+    adv_b = {**_VALID_ADVISORY, "title": "Second Advisory", "cve_ids": ["CVE-2026-0002"]}
+
+    payload_ab = {**_VALID_PAYLOAD, "advisories": [adv_a, adv_b]}
+    payload_ba = {**_VALID_PAYLOAD, "advisories": [adv_b, adv_a]}
+
+    storage_ab = build_sqlite_storage(tmp_path / "ab.sqlite3")
+    storage_ab.migrate()
+    storage_ba = build_sqlite_storage(tmp_path / "ba.sqlite3")
+    storage_ba.migrate()
+
+    result_ab = import_from_file(_make_json(tmp_path, payload_ab, "ab.json"), storage_ab, now=_NOW)  # type: ignore[arg-type]
+    result_ba = import_from_file(_make_json(tmp_path, payload_ba, "ba.json"), storage_ba, now=_NOW)  # type: ignore[arg-type]
+
+    ids_ab = {a.advisory_id for a in result_ab.advisories}
+    ids_ba = {a.advisory_id for a in result_ba.advisories}
+    assert ids_ab == ids_ba
+
+
+@pytest.mark.unit
+def test_empty_advisories_still_writes_audit_event(tmp_path: Path) -> None:
+    """advisories が空配列でも source_fetch AuditEvent が記録される。"""
+    data = {**_VALID_PAYLOAD, "advisories": []}
+    path = _make_json(tmp_path, data)
+    storage = _build_storage(tmp_path)
+
+    result = import_from_file(path, storage, now=_NOW)  # type: ignore[arg-type]
+
+    assert result.accepted_count == 0
+    assert result.rejected_count == 0
+    events = storage.audit_events.list()  # type: ignore[union-attr]
+    assert len(events) == 1
+    assert events[0].event_type == "source_fetch"
+
+
+@pytest.mark.unit
+def test_correlation_id_from_payload_used_when_present(tmp_path: Path) -> None:
+    """payload に correlation_id がある場合、AuditEvent にそのまま使われる。"""
+    data = {**_VALID_PAYLOAD, "correlation_id": "trace-abc-123"}
+    path = _make_json(tmp_path, data)
+    storage = _build_storage(tmp_path)
+
+    import_from_file(path, storage, now=_NOW)  # type: ignore[arg-type]
+
+    events = storage.audit_events.list()  # type: ignore[union-attr]
+    assert len(events) == 1
+    assert events[0].correlation_id == "trace-abc-123"

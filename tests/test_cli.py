@@ -404,8 +404,11 @@ def test_import_external_dry_run_does_not_persist(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
+    from spautopost.storage.sqlite_backend import build_sqlite_storage
+
     _set_env(monkeypatch, valid_environ)
-    _write_sqlite_config(config_dir, tmp_path / "ext.sqlite3")
+    sqlite_path = tmp_path / "ext.sqlite3"
+    _write_sqlite_config(config_dir, sqlite_path)
     import_file = tmp_path / "import.json"
     import_file.write_text(json.dumps(_VALID_EXTERNAL_PAYLOAD), encoding="utf-8")
 
@@ -417,6 +420,12 @@ def test_import_external_dry_run_does_not_persist(
     assert result["dry_run"] is True
     assert result["accepted_count"] == 1
     assert result["rejected_count"] == 0
+
+    # dry-run must not write any rows to the database
+    storage = build_sqlite_storage(sqlite_path)
+    storage.migrate()
+    assert list(storage.advisories.list()) == []
+    assert list(storage.source_records.list()) == []
 
 
 def test_import_external_no_dry_run_persists(

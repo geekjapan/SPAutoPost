@@ -22,7 +22,7 @@ import sys
 from collections.abc import Sequence
 
 from .cli import main as cli_main
-from .scheduler import JobContext, build_job_context, current_job_context
+from .scheduler import build_job_context, current_job_context
 
 EXIT_UNKNOWN_JOB = 2
 
@@ -64,11 +64,6 @@ def run_job(job: str) -> int:
         return cli_main(argv)
     finally:
         current_job_context.reset(token)
-
-
-def get_job_context(job: str) -> JobContext:
-    """Return the JobContext for a job name without executing it."""
-    return build_job_context(job)
 
 
 def main(argv: Sequence[str] | None = None) -> int:

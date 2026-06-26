@@ -216,7 +216,7 @@ def _process_advisories(
 
     accepted: list[tuple[SourceRecord, Advisory]] = []
     rejected: list[RejectedRecord] = []
-    correlation_id = uuid.uuid4().hex
+    correlation_id = _nonempty_str(payload.get("correlation_id")) or uuid.uuid4().hex
 
     for index, raw in enumerate(raw_list):
         if not isinstance(raw, dict):
@@ -230,13 +230,13 @@ def _process_advisories(
         if issues:
             rejected.append(RejectedRecord(index=index, reason="; ".join(issues), raw=raw))
             continue
-        pair = _to_storage_pair(raw, producer=producer, index=index, timestamp=timestamp)
+        pair = _to_storage_pair(raw, producer=producer, timestamp=timestamp)
         accepted.append(pair)
 
     source_records = [p[0] for p in accepted]
     advisories = [p[1] for p in accepted]
 
-    if not dry_run and raw_list:
+    if not dry_run:
         audit_event = _import_audit_event(
             producer=producer,
             accepted=len(accepted),
@@ -263,13 +263,12 @@ def _to_storage_pair(
     raw: Mapping[str, object],
     *,
     producer: str,
-    index: int,
     timestamp: datetime,
 ) -> tuple[SourceRecord, Advisory]:
     """raw advisory dict を SourceRecord + Advisory に変換する。"""
     raw_hash = _hash_json(dict(raw))
     source_record_id = f"ext-{producer}-{raw_hash[:12]}"
-    raw_advisory_id = _nonempty_str(raw.get("advisory_id")) or f"{index}-{raw_hash[:8]}"
+    raw_advisory_id = _nonempty_str(raw.get("advisory_id")) or raw_hash[:16]
     # Hash the (producer, advisory_id) tuple to make the final ID unambiguous regardless
     # of whether producer or advisory_id contain the '-' delimiter.
     advisory_id_hash = _hash_json({"producer": producer, "advisory_id": raw_advisory_id})[:12]
