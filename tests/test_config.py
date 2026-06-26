@@ -108,17 +108,36 @@ def test_unknown_provider_is_rejected() -> None:
     assert any("llm.provider must be one of" in i for i in excinfo.value.issues)
 
 
-@pytest.mark.parametrize(
-    "provider",
-    ["production_api", "production_flow", "generic_api", "test_mock", "test_manual"],
-)
-def test_llm_provider_types_are_supported(provider: str) -> None:
+@pytest.mark.parametrize("provider", ["test_mock", "test_manual"])
+def test_llm_provider_types_are_supported_without_gate(provider: str) -> None:
     raw = _base_config()
     raw["llm"] = {"provider": provider}
 
     config = validate_config(raw, _environ())
 
     assert config.llm.provider == provider
+
+
+@pytest.mark.parametrize("provider", ["production_api", "production_flow", "generic_api"])
+def test_production_providers_require_production_approved(provider: str) -> None:
+    raw = _base_config()
+    raw["llm"] = {"provider": provider}
+
+    with pytest.raises(ConfigValidationError) as excinfo:
+        validate_config(raw, _environ())
+
+    assert any("production_approved" in i for i in excinfo.value.issues)
+
+
+@pytest.mark.parametrize("provider", ["production_api", "production_flow", "generic_api"])
+def test_production_providers_accepted_when_production_approved_true(provider: str) -> None:
+    raw = _base_config()
+    raw["llm"] = {"provider": provider, "production_approved": True}
+
+    config = validate_config(raw, _environ())
+
+    assert config.llm.provider == provider
+    assert config.llm.production_approved is True
 
 
 def test_allow_publish_requires_approval() -> None:
