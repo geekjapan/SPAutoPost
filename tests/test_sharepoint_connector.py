@@ -19,6 +19,8 @@ from spautopost.sharepoint_connector import (
     GraphHttpResponse,
     GraphTransportError,
     SharePointConnector,
+    _ascii_slug,
+    _list_section,
     build_idempotency_key,
     build_site_page_payload,
     classify_graph_status,
@@ -97,6 +99,10 @@ class _PublicationsFake:
             return existing, False
         self._by_key[publication.idempotency_key] = publication
         return publication, True
+
+    def upsert(self, publication: Publication) -> Publication:
+        self._by_key[publication.idempotency_key] = publication
+        return publication
 
 
 class _AuditFake:
@@ -333,3 +339,95 @@ def test_references_javascript_and_data_urls_are_rejected() -> None:
 def test_urllib_transport_rejects_non_https() -> None:
     with pytest.raises(GraphTransportError):
         urllib_transport("POST", "http://insecure/api", {}, {"a": 1})
+
+
+# --- regression tests for review-comment fixes ---
+
+
+@pytest.mark.unit
+def test_successful_retry_updates_failed_publication_to_published() -> None:
+    """A previously-failed publication must be overwritten on successful retry."""
+    store = _StoreFake()
+    draft = _approved_draft()
+    key = build_idempotency_key(
+        draft_id=draft.draft_id,
+        site_id=SITE_ID,
+        page_library_id=PAGE_LIBRARY_ID,
+        advisory_ids=draft.advisory_ids,
+        title=draft.title,
+    )
+    store.publications._by_key[key] = Publication(
+        publication_id="prev-failed",
+        draft_id=draft.draft_id,
+        target_type="site-page",
+        target_site_id=SITE_ID,
+        publication_status="failed",
+        idempotency_key=key,
+        created_at=NOW,
+        updated_at=NOW,
+        error_code="graph_timeout",
+        retryable=True,
+        operation="create",
+    )
+    transport = _FakeTransport(GraphHttpResponse(status=201, body={"id": "page-retry"}))
+    outcome = _connector(transport, store=store).publish_draft(draft)
+
+    assert outcome.posted is True
+    assert outcome.publication.publication_status == "published"
+    assert outcome.publication.sharepoint_page_id == "page-retry"
+    stored = store.publications.get_by_idempotency_key(key)
+    assert stored is not None
+    assert stored.publication_status == "published"
+
+
+@pytest.mark.unit
+def test_concurrent_publishing_reservation_prevents_duplicate_post() -> None:
+    """A 'publishing' row written by another worker must be treated as a duplicate."""
+    store = _StoreFake()
+    draft = _approved_draft()
+    key = build_idempotency_key(
+        draft_id=draft.draft_id,
+        site_id=SITE_ID,
+        page_library_id=PAGE_LIBRARY_ID,
+        advisory_ids=draft.advisory_ids,
+        title=draft.title,
+    )
+    store.publications._by_key[key] = Publication(
+        publication_id="in-flight",
+        draft_id=draft.draft_id,
+        target_type="site-page",
+        target_site_id=SITE_ID,
+        publication_status="publishing",
+        idempotency_key=key,
+        created_at=NOW,
+        updated_at=NOW,
+        operation="create",
+    )
+    outcome = _connector(_exploding_transport, store=store).publish_draft(draft)
+
+    assert outcome.posted is False
+    assert outcome.publication.publication_id == "in-flight"
+    assert outcome.audit_event.error_code == "duplicate_detected"
+
+
+@pytest.mark.unit
+def test_ascii_slug_strips_non_ascii_alphanumeric() -> None:
+    assert _ascii_slug("draft-あ") == "draft"
+    assert _ascii_slug("hello-world") == "hello-world"
+    assert _ascii_slug("CVE-2024-漢字") == "cve-2024"
+    assert _ascii_slug("") == "page"
+
+
+@pytest.mark.unit
+def test_list_section_with_none_items_returns_empty_string() -> None:
+    assert _list_section("Heading", None) == ""
+
+
+@pytest.mark.unit
+def test_references_none_label_falls_back_to_url() -> None:
+    draft = _approved_draft(
+        references=({"label": None, "url": "https://example.com/doc"},),  # type: ignore[arg-type]
+    )
+    rendered = render_page_html(draft)
+    assert "None" not in rendered
+    assert "https://example.com/doc" in rendered

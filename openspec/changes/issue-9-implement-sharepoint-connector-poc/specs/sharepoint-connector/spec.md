@@ -48,12 +48,17 @@ The connector SHALL refuse to publish a `DraftPost` whose status is not `approve
 
 ### Requirement: Connector records the outcome as Publication and AuditEvent
 
-The connector SHALL record every publish attempt as a `Publication` and append an `AuditEvent`. When a storage port is supplied the connector SHALL persist them (race-safe `create_if_absent` for the Publication, append for the AuditEvent); without a store it SHALL return the DTOs for the caller to persist. The `AuditEvent` SHALL carry the approver as `actor` and the publishing identity as `service_principal`.
+The connector SHALL record every publish attempt as a `Publication` and append an `AuditEvent`. When a storage port is supplied the connector SHALL `upsert` the final Publication (so that a successful retry overwrites an earlier failed row) and `append` the AuditEvent; without a store it SHALL return the DTOs for the caller to persist. The `AuditEvent` SHALL carry the approver as `actor` and the publishing identity as `service_principal`.
 
 #### Scenario: Outcome is persisted through the storage port
 
 - **WHEN** a connector with a storage port publishes an approved draft
-- **THEN** the Publication is created through `create_if_absent` and the AuditEvent is appended, and the AuditEvent records the approver and publishing identity
+- **THEN** the Publication is upserted and the AuditEvent is appended, and the AuditEvent records the approver and publishing identity
+
+#### Scenario: Successful retry overwrites a previously-failed Publication
+
+- **WHEN** a draft was previously published and failed (stored as `failed`), and the retry succeeds
+- **THEN** the stored Publication is updated to `publication_status=published` and carries the new SharePoint page id
 
 ### Requirement: Connector classifies and records Graph failures
 
@@ -71,11 +76,16 @@ The connector SHALL classify Graph HTTP failures into the canonical SharePoint e
 
 ### Requirement: Connector enforces idempotency to prevent duplicate posts
 
-The connector SHALL compute a deterministic idempotency key from the `draft_id`, target site id, target page library id, sorted `advisory_ids`, and a normalized title hash. When a storage port is supplied and a `Publication` with the same key already exists in `published` or `publishing` state, the connector SHALL skip the Graph call and record `duplicate_detected` rather than posting again.
+The connector SHALL compute a deterministic idempotency key from the `draft_id`, target site id, target page library id, sorted `advisory_ids`, and a normalized title hash. When a storage port is supplied the connector SHALL atomically claim the key by writing a `publishing` reservation via `create_if_absent` **before** making any Graph network call. If the `create_if_absent` returns an existing row with `published` or `publishing` status the connector SHALL skip the Graph call and record `duplicate_detected`. A `failed` row allows retry (the reservation is overwritten by the next attempt). Stale `publishing` entries (e.g. from a crashed worker) are an edge case deferred to a future cleanup/TTL mechanism; for this PoC scope they are treated the same as an in-progress publication.
 
-#### Scenario: Duplicate publish is skipped
+#### Scenario: Duplicate publish is skipped when already published
 
 - **WHEN** a draft is published whose idempotency key already maps to a `published` Publication in the store
+- **THEN** the connector does not call the transport and records the result as `duplicate_detected`
+
+#### Scenario: Concurrent publisher is blocked by publishing reservation
+
+- **WHEN** a second worker attempts to publish a draft whose idempotency key is already claimed as `publishing`
 - **THEN** the connector does not call the transport and records the result as `duplicate_detected`
 
 #### Scenario: Idempotency key is deterministic

@@ -270,6 +270,27 @@ class SharePointConnector:
         approver: str | None,
         publisher_principal: str | None,
     ) -> PublishOutcome:
+        # Reserve the idempotency key atomically before calling Graph so that
+        # concurrent workers sharing the same store cannot both pass the
+        # _existing_duplicate check and each create a separate SharePoint page.
+        if self.store is not None:
+            reservation = Publication(
+                publication_id=self.id_factory(),
+                draft_id=draft.draft_id,
+                target_type="site-page",
+                target_site_id=self.site_id,
+                publication_status="publishing",
+                idempotency_key=key,
+                created_at=now,
+                updated_at=now,
+                target_page_library_id=self.page_library_id,
+                operation="create",
+            )
+            existing, created = self.store.publications.create_if_absent(reservation)
+            if not created and existing.publication_status in {"published", "publishing"}:
+                return self._record_duplicate(
+                    existing, key, advisory_ids, now, correlation, approver, publisher_principal
+                )
         payload = build_site_page_payload(draft)
         url = f"{self.base_url}/sites/{self.site_id}/pages"
         headers = {"Authorization": f"Bearer {self.token_provider()}"}
@@ -291,7 +312,7 @@ class SharePointConnector:
 
         if response.status in (200, 201):
             page_id = _optional_str(response.body, "id")
-            # ponytail: a created Graph page is a SharePoint *draft*; we record it as
+            # A created Graph page is a SharePoint *draft*; we record it as
             # publication_status="published" (the connector's write succeeded) with
             # operation="create" preserving the create-vs-promote distinction. News
             # promote (Graph /publish, operation="publish") is deferred to #20/#32.
@@ -400,8 +421,7 @@ class SharePointConnector:
     def _persist(self, publication: Publication) -> Publication:
         if self.store is None:
             return publication
-        stored, _created = self.store.publications.create_if_absent(publication)
-        return stored
+        return self.store.publications.upsert(publication)
 
     def _append_audit(self, event: AuditEvent) -> None:
         if self.store is not None:
@@ -545,7 +565,9 @@ def _section(heading: str, body: str) -> str:
     return f"<h2>{html.escape(heading)}</h2><p>{html.escape(body)}</p>"
 
 
-def _list_section(heading: str, items: Sequence[str]) -> str:
+def _list_section(heading: str, items: Sequence[str] | None) -> str:
+    if not items:
+        return ""
     cleaned = [item for item in items if isinstance(item, str) and item.strip()]
     if not cleaned:
         return ""
@@ -562,16 +584,17 @@ def _references_section(references: Sequence[Mapping[str, str]]) -> str:
         raw_url = str(ref.get("url", ""))
         if not raw_url or not raw_url.startswith(_ALLOWED_URL_SCHEMES):
             continue  # reject javascript:, data:, and relative URLs
-        label = html.escape(str(ref.get("label", raw_url)))
+        label_val = ref.get("label") or raw_url
+        label = html.escape(str(label_val))
         url = html.escape(raw_url)
-        rendered.append(f'<li><a href="{url}">{label or url}</a></li>')
+        rendered.append(f'<li><a href="{url}">{label}</a></li>')
     if not rendered:
         return ""
     return f"<h2>{html.escape('参考情報')}</h2><ul>{''.join(rendered)}</ul>"
 
 
 def _ascii_slug(value: str) -> str:
-    slug = "".join(ch if ch.isalnum() else "-" for ch in value.lower())
+    slug = "".join(ch if ch.isascii() and ch.isalnum() else "-" for ch in value.lower())
     slug = "-".join(part for part in slug.split("-") if part)
     return slug or "page"
 
