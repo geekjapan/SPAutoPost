@@ -151,6 +151,14 @@ def test_production_providers_accepted_when_production_approved_true(provider: s
             "api_key": "env:AZURE_OPENAI_API_KEY",
         }
         environ = {**environ, "AZURE_OPENAI_API_KEY": "dummy-key"}
+    elif provider == "generic_api":
+        llm_section.update(
+            {
+                "endpoint_url": "https://api.example.test/v1/chat/completions",
+                "model": "gpt-4o",
+                "auth_env_var": "LLM_API_KEY",
+            }
+        )
     raw["llm"] = llm_section
 
     config = validate_config(raw, environ)
@@ -180,3 +188,36 @@ def test_missing_target_ids_are_reported() -> None:
     issues = "\n".join(excinfo.value.issues)
     assert "sharepoint.tenant_id is required" in issues
     assert "sharepoint.site_id is required" in issues
+
+
+def test_generic_api_env_ref_endpoint_resolves_via_injected_environ() -> None:
+    raw = _base_config()
+    raw["llm"] = {
+        "provider": "generic_api",
+        "production_approved": True,
+        "endpoint_url": "env:LLM_ENDPOINT",
+        "model": "gpt-4o",
+        "auth_env_var": "LLM_API_KEY",
+    }
+    environ = {**_environ(), "LLM_ENDPOINT": "https://api.example.test/v1"}
+
+    config = validate_config(raw, environ)
+
+    assert config.llm.endpoint_url == "env:LLM_ENDPOINT"
+
+
+def test_generic_api_env_ref_endpoint_rejects_http_via_injected_environ() -> None:
+    raw = _base_config()
+    raw["llm"] = {
+        "provider": "generic_api",
+        "production_approved": True,
+        "endpoint_url": "env:LLM_ENDPOINT",
+        "model": "gpt-4o",
+        "auth_env_var": "LLM_API_KEY",
+    }
+    environ = {**_environ(), "LLM_ENDPOINT": "http://insecure.example.test/v1"}
+
+    with pytest.raises(ConfigValidationError) as excinfo:
+        validate_config(raw, environ)
+
+    assert any("https" in i for i in excinfo.value.issues)

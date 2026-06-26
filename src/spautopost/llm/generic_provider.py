@@ -19,9 +19,11 @@ from spautopost.llm import (
     DraftInput,
     DraftOutput,
     LLMProviderConfigError,
+    LLMProviderError,
     ProviderMetadata,
     ProviderStatus,
 )
+from spautopost.secrets import is_secret_ref, secret_env_name
 
 # ---------------------------------------------------------------------------
 # System prompt（安全性ガイドライン・出力 JSON schema を含む）
@@ -77,14 +79,6 @@ _ALLOWED_ADVISORY_FIELDS = frozenset(
 )
 
 
-class LLMProviderError(Exception):
-    """LLM API 呼び出しの失敗。Secret 値はメッセージに含めない。"""
-
-    def __init__(self, message: str, *, retryable: bool) -> None:
-        super().__init__(message)
-        self.retryable = retryable
-
-
 class GenericApiLLMProvider:
     """OpenAI-compatible REST API を設定で有効化する generic_api provider。
 
@@ -117,10 +111,19 @@ class GenericApiLLMProvider:
     def validate_config(self) -> ProviderStatus:
         """設定の構造的正当性を確認する（実 API 呼び出しなし）。"""
         issues: list[str] = []
-        if not self._config.endpoint_url:
+        endpoint = self._config.endpoint_url
+        if not endpoint:
             issues.append("llm.endpoint_url is required for generic_api provider")
-        elif not self._config.endpoint_url.startswith("https://"):
-            issues.append("llm.endpoint_url must use https:// to protect Bearer token in transit")
+        else:
+            if is_secret_ref(endpoint):
+                env_name = secret_env_name(endpoint)
+                endpoint = os.environ.get(env_name, "")
+                if not endpoint:
+                    issues.append(f"llm.endpoint_url env var {env_name!r} is not set")
+            if endpoint and not endpoint.startswith("https://"):
+                issues.append(
+                    "llm.endpoint_url must use https:// to protect Bearer token in transit"
+                )
         if not self._config.model:
             issues.append("llm.model is required for generic_api provider")
         if not self._config.auth_env_var:
@@ -141,7 +144,7 @@ class GenericApiLLMProvider:
             # env var 名のみ出力（値は出力しない）
             raise LLMProviderError(
                 f"env var {auth_env_var!r} is not set or empty",
-                retryable=False,
+                is_retryable=False,
             )
         return self._call_with_retry(draft_input, token)
 
@@ -153,12 +156,15 @@ class GenericApiLLMProvider:
     # ------------------------------------------------------------------
 
     def _call_with_retry(self, draft_input: DraftInput, token: str) -> DraftOutput:
+        import time
+
         for attempt in range(self._config.max_retries + 1):
             try:
                 return self._attempt(draft_input, token)
             except LLMProviderError as exc:
-                if not exc.retryable or attempt >= self._config.max_retries:
+                if not exc.is_retryable or attempt >= self._config.max_retries:
                     raise
+                time.sleep(1)
         # max_retries >= 0 保証（config validation 済み）かつ retryable=True の場合、
         # ループ内で必ず raise されるためここには到達しない
         raise AssertionError("unreachable")
@@ -167,6 +173,14 @@ class GenericApiLLMProvider:
         payload = _build_payload(self._config.model or "", draft_input)
         data = json.dumps(payload, ensure_ascii=False).encode("utf-8")
         endpoint = self._config.endpoint_url or ""
+        if is_secret_ref(endpoint):
+            env_name = secret_env_name(endpoint)
+            endpoint = os.environ.get(env_name, "")
+            if not endpoint:
+                raise LLMProviderError(
+                    f"env var {env_name!r} referenced by llm.endpoint_url is not set",
+                    is_retryable=False,
+                )
         req = urllib.request.Request(  # noqa: S310
             endpoint,
             data=data,
@@ -184,12 +198,22 @@ class GenericApiLLMProvider:
             retryable = exc.code >= 500 or exc.code == 429
             raise LLMProviderError(
                 f"HTTP {exc.code} from LLM API",
-                retryable=retryable,
+                is_retryable=retryable,
             ) from exc
-        except urllib.error.URLError as exc:
+        except TimeoutError as exc:
             raise LLMProviderError(
-                f"network error calling LLM API: {exc.reason}",
-                retryable=True,
+                f"timeout calling LLM API: {exc}",
+                is_retryable=True,
+            ) from exc
+        except (urllib.error.URLError, OSError) as exc:
+            raise LLMProviderError(
+                f"network error calling LLM API: {exc}",
+                is_retryable=True,
+            ) from exc
+        except ValueError as exc:
+            raise LLMProviderError(
+                f"invalid request or URL: {exc}",
+                is_retryable=False,
             ) from exc
         return _parse_body(body, draft_input)
 
@@ -245,12 +269,42 @@ def _safe_references(refs: object) -> list[dict[str, str]]:
 def _safe_advisory(advisory: object) -> dict[str, object]:
     """advisory から送信許可フィールドのみ抽出する（禁止情報を除外）。"""
     if isinstance(advisory, Mapping):
-        return {k: v for k, v in advisory.items() if k in _ALLOWED_ADVISORY_FIELDS}
+        filtered: dict[str, object] = {
+            k: v for k, v in advisory.items() if k in _ALLOWED_ADVISORY_FIELDS
+        }
+        if "references" in filtered:
+            filtered["references"] = _safe_references(filtered["references"])
+        return filtered
     if isinstance(advisory, Sequence) and not isinstance(advisory, str | bytes | bytearray):
         first = next(iter(advisory), None)
         if isinstance(first, Mapping):
-            return {k: v for k, v in first.items() if k in _ALLOWED_ADVISORY_FIELDS}
+            filtered = {k: v for k, v in first.items() if k in _ALLOWED_ADVISORY_FIELDS}
+            if "references" in filtered:
+                filtered["references"] = _safe_references(filtered["references"])
+            return filtered
     return {}
+
+
+_REQUIRED_DRAFT_FIELDS = frozenset({"title", "summary_for_users", "impact"})
+_REQUIRED_SEQUENCE_FIELDS = frozenset({"required_actions"})
+
+
+def _validate_draft_fields(data: dict[str, Any]) -> None:
+    missing = [f for f in _REQUIRED_DRAFT_FIELDS if f not in data or data[f] is None]
+    # required_actions must be a list/sequence so _build_draft_output._seq() can use it
+    bad_type = [
+        f
+        for f in _REQUIRED_SEQUENCE_FIELDS
+        if f not in data
+        or data[f] is None
+        or isinstance(data[f], str | bytes | bytearray)
+        or not isinstance(data[f], Sequence)
+    ]
+    if missing or bad_type:
+        raise LLMProviderError(
+            f"LLM response missing or invalid required fields: {sorted(missing + bad_type)}",
+            is_retryable=False,
+        )
 
 
 def _parse_body(body: bytes, draft_input: DraftInput) -> DraftOutput:
@@ -258,16 +312,21 @@ def _parse_body(body: bytes, draft_input: DraftInput) -> DraftOutput:
     try:
         api_resp = json.loads(body)
         content = api_resp["choices"][0]["message"]["content"]
-        output_data: dict[str, Any] = json.loads(content)
+        output_data = json.loads(content)
+        if not isinstance(output_data, dict):
+            raise TypeError("parsed content is not a JSON object")
     except (json.JSONDecodeError, KeyError, IndexError, TypeError) as exc:
         raise LLMProviderError(
             f"failed to parse LLM API response: {type(exc).__name__}",
-            retryable=False,
+            is_retryable=False,
         ) from None
+    _validate_draft_fields(output_data)
     return _build_draft_output(output_data, draft_input)
 
 
 def _build_draft_output(data: dict[str, Any], draft_input: DraftInput) -> DraftOutput:
+    from spautopost.llm.templates import _input_hash  # local import to avoid circular dep
+
     def _seq(key: str) -> tuple[Any, ...]:
         val = data.get(key, ())
         if isinstance(val, Sequence) and not isinstance(val, str | bytes | bytearray):
@@ -293,6 +352,7 @@ def _build_draft_output(data: dict[str, Any], draft_input: DraftInput) -> DraftO
             "guardrail:no_attack_steps_or_poc",
             "human_review_required",
         ),
+        generation_input_hash=_input_hash(draft_input),
     )
 
 
