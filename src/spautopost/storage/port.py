@@ -11,10 +11,22 @@ queryable 列のみ column 化し、残りは JSON 列（attributes / payload）
 
 from __future__ import annotations
 
+import re
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 
 from .serialization import dumps_json, loads_json, now_iso, to_iso_utc
+
+# Sensitive Data Policy: AdminCommand payload からこれらのキーを除去する。
+_SECRET_KEY_RE = re.compile(
+    r"^(api_?key|access_?token|refresh_?token|client_?secret|private_?key"
+    r"|password|cookie|authorization|secret)$",
+    re.IGNORECASE,
+)
+
+
+def _scrub_payload(payload: dict) -> dict:
+    return {k: v for k, v in payload.items() if not _SECRET_KEY_RE.match(k)}
 
 
 @dataclass(frozen=True)
@@ -123,14 +135,18 @@ class _SqlStorage(StoragePort):
 
     # --- 内部ヘルパ -------------------------------------------------------
     def _split(self, obj: dict, spec: Table):
-        """obj を promoted column 値リストと JSON 列値に分ける。"""
+        """obj を promoted column 値リストと JSON 列値に分ける。
+
+        キーが存在する場合は None（SQL NULL）も column に含める。これにより
+        UPSERT で nullable 列を NULL にクリアできる。
+        """
         data = dict(obj)  # 入力を mutate しない
         cols, params = [], []
         for c in spec.columns:
-            v = data.pop(c, None)
-            if v is None:
+            if c not in data:
                 continue
-            if c in spec.ts_columns:
+            v = data.pop(c)
+            if v is not None and c in spec.ts_columns:
                 v = self._ts_param(v)
             cols.append(c)
             params.append(v)
@@ -171,9 +187,15 @@ class _SqlStorage(StoragePort):
     # --- command queue ----------------------------------------------------
     def append_command(self, command: dict) -> None:
         data = dict(command)
+        # payload は _split に渡す前に取り出し、secret を除去してから JSON 列に書く。
+        # _split に渡すと {"payload": {...}} と二重にラップされてしまうため。
+        payload = _scrub_payload(data.pop("payload", None) or {})
         data.setdefault("status", "pending")
         data.setdefault("created_at", now_iso())
         cols, params = self._split(data, _ADMIN_TABLE)
+        # _split の末尾要素は json_column（payload）のプレースホルダ。
+        # data はこの時点で空なので {} が入っている。実際の payload に差し替える。
+        params[-1] = self._json_param(payload)
         placeholders = ", ".join([self.PH] * len(cols))
         sql = f"INSERT INTO {_ADMIN_TABLE.table} ({', '.join(cols)}) VALUES ({placeholders})"
         cur = self.conn.cursor()
@@ -197,4 +219,14 @@ class _SqlStorage(StoragePort):
         )
 
     def _command_from_row(self, row) -> dict:
-        return self._merge(dict(row), _ADMIN_TABLE)
+        # _merge は json_column の内容をトップレベルに展開するため AdminCommand には使えない。
+        # payload は nested dict として返し、promoted column は直接マップする。
+        row = dict(row)
+        result = {}
+        for c in _ADMIN_TABLE.columns:
+            v = row.get(c)
+            if v is not None and c in _ADMIN_TABLE.ts_columns:
+                v = to_iso_utc(v)
+            result[c] = v
+        result["payload"] = loads_json(row.get("payload") or "{}")
+        return result

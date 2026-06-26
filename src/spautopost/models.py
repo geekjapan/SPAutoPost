@@ -113,3 +113,7 @@ class AdminCommand:
     payload: dict = field(default_factory=dict)
     status: str = "pending"
     correlation_id: str | None = None
+    error_code: str | None = None
+    error_message: str | None = None
+    created_at: str | None = None
+    processed_at: str | None = None

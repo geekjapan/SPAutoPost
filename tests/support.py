@@ -61,8 +61,10 @@ def sample_publication(pub_id: str, draft_id: str, idem: str) -> dict:
     }
 
 
-def sample_command(command_id: str, idem: str, draft_id: str = "draft-1",
+def sample_command(command_id: str, idem: str, draft_id: str | None = None,
                    command_type: str = "approve") -> dict:
+    # draft_id=None はデフォルト。FK 制約が有効な SQLite でも NULL は許容される。
+    # FK を検証したいテストは事前に draft を作成してから draft_id を渡すこと。
     return {
         "command_id": command_id,
         "command_type": command_type,

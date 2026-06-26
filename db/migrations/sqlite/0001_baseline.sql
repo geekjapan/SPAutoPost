@@ -71,7 +71,7 @@ CREATE INDEX idx_audit_events_event_type ON audit_events (event_type);
 CREATE TABLE admin_commands (
   command_id TEXT PRIMARY KEY,
   command_type TEXT NOT NULL CHECK (command_type IN ('edit','approve','reject','request_regeneration','publish_request')),
-  target_draft_id TEXT,
+  target_draft_id TEXT REFERENCES draft_posts (draft_id) ON DELETE CASCADE,
   requested_by TEXT,
   payload TEXT NOT NULL DEFAULT '{}',
   idempotency_key TEXT NOT NULL,

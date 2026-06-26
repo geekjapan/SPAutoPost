@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 from .serialization import now_iso
@@ -15,11 +16,20 @@ _REPO_ROOT = Path(__file__).resolve().parents[3]
 
 
 def migrations_dir(dialect: str) -> Path:
+    # SPAUTOPOST_MIGRATIONS_DIR が設定されている場合はそちらを優先する。
+    # インストール済みパッケージ環境では _REPO_ROOT が repo root を指さないため。
+    env_dir = os.environ.get("SPAUTOPOST_MIGRATIONS_DIR")
+    if env_dir:
+        return Path(env_dir) / dialect
     return _REPO_ROOT / "db" / "migrations" / dialect
 
 
 def split_statements(sql: str) -> list[str]:
-    """`;` 区切りで文を分割し、コメント行を除去する。"""
+    """``;`` 区切りで文を分割し、コメント行を除去する。
+
+    注意: 文字列リテラルや JSON 内に ``;`` が含まれる場合に誤って分割されます。
+    migration ファイル内では文字列中に ``;`` を使用しないでください。
+    """
     statements = []
     for chunk in sql.split(";"):
         lines = [ln for ln in chunk.splitlines() if not ln.strip().startswith("--")]
@@ -39,10 +49,18 @@ def apply_migrations(conn, dialect: str, directory: Path | None = None,
         "(version TEXT PRIMARY KEY, applied_at TEXT NOT NULL)"
     )
     cur.execute("SELECT version FROM schema_migrations")
-    applied = {row[0] for row in cur.fetchall()}
+    # psycopg の dict_row では row[0] が失敗するため row["version"] を使う。
+    applied = {row["version"] for row in cur.fetchall()}
+
+    sql_files = sorted(directory.glob("*.sql"))
+    if not sql_files:
+        raise FileNotFoundError(
+            f"No SQL migration files found in {directory}. "
+            "Set SPAUTOPOST_MIGRATIONS_DIR to the correct migrations path."
+        )
 
     newly: list[str] = []
-    for path in sorted(directory.glob("*.sql")):
+    for path in sql_files:
         version = path.stem
         if version in applied:
             continue

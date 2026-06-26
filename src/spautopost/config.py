@@ -8,13 +8,24 @@ from dataclasses import dataclass
 
 # postgresql://user:password@host:port/db の password 部を隠す。
 _URL_PASSWORD = re.compile(r"(://[^:/?#@]+:)([^@/?#]+)(@)")
+# ?password=... または &password=... 形式（クエリパラメータ）。
+_QUERY_PASSWORD = re.compile(r"([?&;])password=[^&;#\s]+", re.IGNORECASE)
+# host=h user=u password=s3cr3t 形式（キーワード DSN）。
+_KW_PASSWORD = re.compile(r"\bpassword=\S+", re.IGNORECASE)
 
 
 def redact_url(url: str | None) -> str:
-    """接続 URL の password を伏せた表示用文字列を返す。"""
+    """接続 URL / DSN の password を伏せた表示用文字列を返す。
+
+    対応形式: ``user:pass@host``（URL）、``?password=s``（クエリパラメータ）、
+    ``password=s``（キーワード DSN）。
+    """
     if not url:
         return "(unset)"
-    return _URL_PASSWORD.sub(r"\1***\3", url)
+    url = _URL_PASSWORD.sub(r"\1***\3", url)
+    url = _QUERY_PASSWORD.sub(r"\1password=***", url)
+    url = _KW_PASSWORD.sub("password=***", url)
+    return url
 
 
 @dataclass(frozen=True)
