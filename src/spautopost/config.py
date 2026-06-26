@@ -15,7 +15,7 @@ from typing import Any
 import yaml
 
 from .errors import ConfigValidationError
-from .secrets import iter_secret_refs
+from .secrets import is_secret_ref, iter_secret_refs, secret_env_name
 
 ENVIRONMENTS = frozenset({"development", "test", "production"})
 STORAGE_PROVIDERS = frozenset({"postgresql", "sqlite"})
@@ -355,8 +355,8 @@ def _validate_llm(raw: Mapping[str, Any], issues: list[str]) -> LLMConfig:
         if not endpoint_url:
             issues.append("llm.endpoint_url is required when llm.provider=generic_api")
         else:
-            if endpoint_url.startswith("env:"):
-                resolved_url = os.environ.get(endpoint_url[len("env:") :], "")
+            if is_secret_ref(endpoint_url):
+                resolved_url = os.environ.get(secret_env_name(endpoint_url), "")
             else:
                 resolved_url = endpoint_url
             if resolved_url and not resolved_url.startswith("https://"):

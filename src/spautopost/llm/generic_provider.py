@@ -23,6 +23,7 @@ from spautopost.llm import (
     ProviderMetadata,
     ProviderStatus,
 )
+from spautopost.secrets import is_secret_ref, secret_env_name
 
 # ---------------------------------------------------------------------------
 # System prompt（安全性ガイドライン・出力 JSON schema を含む）
@@ -114,9 +115,8 @@ class GenericApiLLMProvider:
         if not endpoint:
             issues.append("llm.endpoint_url is required for generic_api provider")
         else:
-            if endpoint.startswith("env:"):
-                env_name = endpoint[len("env:") :]
-                endpoint = os.environ.get(env_name, "")
+            if is_secret_ref(endpoint):
+                endpoint = os.environ.get(secret_env_name(endpoint), "")
             if endpoint and not endpoint.startswith("https://"):
                 issues.append(
                     "llm.endpoint_url must use https:// to protect Bearer token in transit"
@@ -170,8 +170,8 @@ class GenericApiLLMProvider:
         payload = _build_payload(self._config.model or "", draft_input)
         data = json.dumps(payload, ensure_ascii=False).encode("utf-8")
         endpoint = self._config.endpoint_url or ""
-        if endpoint.startswith("env:"):
-            env_name = endpoint[len("env:") :]
+        if is_secret_ref(endpoint):
+            env_name = secret_env_name(endpoint)
             endpoint = os.environ.get(env_name, "")
             if not endpoint:
                 raise LLMProviderError(

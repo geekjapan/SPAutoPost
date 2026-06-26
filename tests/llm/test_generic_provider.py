@@ -432,6 +432,61 @@ class TestGenerateDraftErrors:
         # 4xx は retryable=False → 1 回のみ
         assert call_count == 1
 
+    def test_content_is_json_array_raises_non_retryable_error(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("LLM_API_KEY", "sk-test")
+        provider = GenericApiLLMProvider(_config(max_retries=0))
+        with patch(
+            "urllib.request.urlopen",
+            return_value=_mock_urlopen(json.dumps(["not", "a", "dict"])),
+        ):
+            with pytest.raises(LLMProviderError) as exc_info:
+                provider.generate_draft(_draft_input())
+        assert exc_info.value.retryable is False
+
+    def test_content_missing_required_field_raises_non_retryable_error(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("LLM_API_KEY", "sk-test")
+        incomplete = json.dumps(
+            {
+                "summary_for_users": "テスト要約です。",
+                "impact": "TestProduct に影響があります。",
+                "required_actions": ["対象製品を確認してください。"],
+                # title is missing
+            }
+        )
+        provider = GenericApiLLMProvider(_config(max_retries=0))
+        with patch(
+            "urllib.request.urlopen",
+            return_value=_mock_urlopen(incomplete),
+        ):
+            with pytest.raises(LLMProviderError) as exc_info:
+                provider.generate_draft(_draft_input())
+        assert exc_info.value.retryable is False
+
+    def test_content_required_actions_as_string_raises_non_retryable_error(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("LLM_API_KEY", "sk-test")
+        bad_actions = json.dumps(
+            {
+                "title": "[注意喚起] Test",
+                "summary_for_users": "テスト要約です。",
+                "impact": "影響あり。",
+                "required_actions": "文字列（リストでない）",
+            }
+        )
+        provider = GenericApiLLMProvider(_config(max_retries=0))
+        with patch(
+            "urllib.request.urlopen",
+            return_value=_mock_urlopen(bad_actions),
+        ):
+            with pytest.raises(LLMProviderError) as exc_info:
+                provider.generate_draft(_draft_input())
+        assert exc_info.value.retryable is False
+
 
 # ---------------------------------------------------------------------------
 # build_llm_provider integration
