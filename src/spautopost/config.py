@@ -6,7 +6,6 @@
 
 from __future__ import annotations
 
-import os
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
@@ -156,7 +155,7 @@ def validate_config(raw: Mapping[str, Any], environ: Mapping[str, str]) -> Confi
     storage = _validate_storage(raw, issues)
     sharepoint = _validate_sharepoint(raw, issues)
     security = _validate_security(raw, issues)
-    llm = _validate_llm(raw, issues)
+    llm = _validate_llm(raw, issues, environ)
     graph = _validate_graph(raw, issues)
     _validate_publish_consistency(sharepoint, security, issues)
     _validate_secret_refs(raw, environ, issues)
@@ -325,7 +324,9 @@ def _validate_security(raw: Mapping[str, Any], issues: list[str]) -> SecurityCon
     )
 
 
-def _validate_llm(raw: Mapping[str, Any], issues: list[str]) -> LLMConfig:
+def _validate_llm(
+    raw: Mapping[str, Any], issues: list[str], environ: Mapping[str, str]
+) -> LLMConfig:
     sec = _section(raw, "llm")
     provider = sec.get("provider")
     if provider not in LLM_PROVIDERS:
@@ -356,7 +357,7 @@ def _validate_llm(raw: Mapping[str, Any], issues: list[str]) -> LLMConfig:
             issues.append("llm.endpoint_url is required when llm.provider=generic_api")
         else:
             if is_secret_ref(endpoint_url):
-                resolved_url = os.environ.get(secret_env_name(endpoint_url), "")
+                resolved_url = environ.get(secret_env_name(endpoint_url), "")
             else:
                 resolved_url = endpoint_url
             if resolved_url and not resolved_url.startswith("https://"):

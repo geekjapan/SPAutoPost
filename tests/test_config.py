@@ -159,6 +159,39 @@ def test_allow_publish_requires_approval() -> None:
     assert any("require_approval" in i for i in excinfo.value.issues)
 
 
+def test_generic_api_env_ref_endpoint_resolves_via_injected_environ() -> None:
+    raw = _base_config()
+    raw["llm"] = {
+        "provider": "generic_api",
+        "production_approved": True,
+        "endpoint_url": "env:LLM_ENDPOINT",
+        "model": "gpt-4o",
+        "auth_env_var": "LLM_API_KEY",
+    }
+    environ = {**_environ(), "LLM_ENDPOINT": "https://api.example.test/v1"}
+
+    config = validate_config(raw, environ)
+
+    assert config.llm.endpoint_url == "env:LLM_ENDPOINT"
+
+
+def test_generic_api_env_ref_endpoint_rejects_http_via_injected_environ() -> None:
+    raw = _base_config()
+    raw["llm"] = {
+        "provider": "generic_api",
+        "production_approved": True,
+        "endpoint_url": "env:LLM_ENDPOINT",
+        "model": "gpt-4o",
+        "auth_env_var": "LLM_API_KEY",
+    }
+    environ = {**_environ(), "LLM_ENDPOINT": "http://insecure.example.test/v1"}
+
+    with pytest.raises(ConfigValidationError) as excinfo:
+        validate_config(raw, environ)
+
+    assert any("https" in i for i in excinfo.value.issues)
+
+
 def test_missing_target_ids_are_reported() -> None:
     raw = _base_config()
     raw["sharepoint"] = {"mode": "site-page", "allow_publish": False}
