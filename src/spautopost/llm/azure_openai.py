@@ -190,6 +190,8 @@ class AzureOpenAIProvider:
             raise LLMProviderError(
                 f"network error: {type(e.reason).__name__}", is_retryable=True
             ) from e
+        except OSError as e:
+            raise LLMProviderError(f"network error: {type(e).__name__}", is_retryable=True) from e
 
         try:
             result: dict[str, Any] = json.loads(raw)
@@ -202,12 +204,10 @@ class AzureOpenAIProvider:
 
 def _map_http_error(e: urllib.error.HTTPError) -> LLMProviderError:
     code = e.code
-    if code in (401, 403):
-        return LLMProviderError(f"authentication failed (HTTP {code})", is_retryable=False)
-    if code == 400:
-        return LLMProviderError(f"bad request (HTTP {code})", is_retryable=False)
     if code == 429:
         return LLMProviderError(f"rate limited (HTTP {code})", is_retryable=True)
+    if 400 <= code < 500:
+        return LLMProviderError(f"client error (HTTP {code})", is_retryable=False)
     return LLMProviderError(f"server error (HTTP {code})", is_retryable=True)
 
 
@@ -243,6 +243,8 @@ def _parse_response(
     try:
         content_str = data["choices"][0]["message"]["content"]
         content = json.loads(content_str)
+        if not isinstance(content, dict):
+            raise TypeError("content is not a JSON object")
     except (KeyError, IndexError, TypeError, json.JSONDecodeError) as e:
         raise LLMProviderError(
             "failed to extract content from API response", is_retryable=False
@@ -275,7 +277,8 @@ def _parse_response(
         "token_usage": token_usage_str,
     }
 
-    validation_hints = tuple(content.get("validation_hints") or ())
+    raw_hints = content.get("validation_hints")
+    validation_hints = tuple(str(h) for h in raw_hints) if isinstance(raw_hints, list) else ()
     # guardrail hints が欠ける場合に補完する
     required_hints = (
         "guardrail:no_unsupported_claims",
@@ -286,16 +289,30 @@ def _parse_response(
         if hint not in validation_hints:
             validation_hints = (*validation_hints, hint)
 
+    raw_req_actions = content.get("required_actions")
+    raw_admin_actions = content.get("admin_actions")
+    raw_warnings = content.get("warnings")
+    raw_notes = content.get("uncertainty_notes")
+    raw_refs = content.get("references")
+
     return DraftOutput(
         title=str(content.get("title", "")),
         summary_for_users=str(content.get("summary_for_users", "")),
         impact=str(content.get("impact", "")),
-        required_actions=tuple(str(a) for a in (content.get("required_actions") or [])),
-        admin_actions=tuple(str(a) for a in (content.get("admin_actions") or [])),
+        required_actions=(
+            tuple(str(a) for a in raw_req_actions) if isinstance(raw_req_actions, list) else ()
+        ),
+        admin_actions=(
+            tuple(str(a) for a in raw_admin_actions) if isinstance(raw_admin_actions, list) else ()
+        ),
         deadline=content.get("deadline") or None,
-        references=tuple(content.get("references") or []),
-        warnings=tuple(str(w) for w in (content.get("warnings") or [])),
-        uncertainty_notes=tuple(str(n) for n in (content.get("uncertainty_notes") or [])),
+        references=(
+            tuple(dict(r) for r in raw_refs if isinstance(r, Mapping))
+            if isinstance(raw_refs, list)
+            else ()
+        ),
+        warnings=tuple(str(w) for w in raw_warnings) if isinstance(raw_warnings, list) else (),
+        uncertainty_notes=tuple(str(n) for n in raw_notes) if isinstance(raw_notes, list) else (),
         validation_hints=validation_hints,
         source_mapping=source_mapping,
         generation_input_hash=input_hash,

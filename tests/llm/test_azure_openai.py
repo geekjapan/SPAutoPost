@@ -15,6 +15,7 @@ from spautopost.llm import (
     DraftInput,
     DraftOutput,
     LLMProvider,
+    LLMProviderConfigError,
     LLMProviderError,
     build_llm_provider,
 )
@@ -556,6 +557,46 @@ def test_generate_draft_exhausts_retries_and_raises(
     assert len(sleep_calls) == 2  # max_retries=2 → 2 回バックオフ
 
 
+def test_generate_draft_retries_on_oserror(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """OSError (e.g. read timeout / connection reset) is retryable."""
+    monkeypatch.setenv("AZURE_OPENAI_API_KEY", "test-key-value")
+    sleep_calls: list[float] = []
+    provider = AzureOpenAIProvider(
+        _VALID_AZURE_CONFIG,
+        _sleep_fn=lambda s: sleep_calls.append(s),
+    )
+    success_resp = _mock_urlopen(_api_response())
+
+    side_effects: list[Any] = [OSError("connection reset"), success_resp]
+    with patch("urllib.request.urlopen", side_effect=side_effects):
+        result = provider.generate_draft(_draft_input())
+
+    assert isinstance(result, DraftOutput)
+    assert len(sleep_calls) == 1
+
+
+def test_generate_draft_retries_on_timeout_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """TimeoutError (Python 3.12 subclass of OSError) is retryable."""
+    monkeypatch.setenv("AZURE_OPENAI_API_KEY", "test-key-value")
+    sleep_calls: list[float] = []
+    provider = AzureOpenAIProvider(
+        _VALID_AZURE_CONFIG,
+        _sleep_fn=lambda s: sleep_calls.append(s),
+    )
+    success_resp = _mock_urlopen(_api_response())
+
+    side_effects: list[Any] = [TimeoutError("timed out"), success_resp]
+    with patch("urllib.request.urlopen", side_effect=side_effects):
+        result = provider.generate_draft(_draft_input())
+
+    assert isinstance(result, DraftOutput)
+    assert len(sleep_calls) == 1
+
+
 # ---------------------------------------------------------------------------
 # build_llm_provider tests
 # ---------------------------------------------------------------------------
@@ -579,5 +620,5 @@ def test_build_llm_provider_selects_azure_openai_for_production_api() -> None:
 def test_build_llm_provider_raises_without_azure_config_for_production_api() -> None:
     config = LLMConfig(provider="production_api", prompt_version="v1")
 
-    with pytest.raises(LLMProviderError):
+    with pytest.raises(LLMProviderConfigError):
         build_llm_provider(config)

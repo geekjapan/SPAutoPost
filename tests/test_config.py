@@ -114,9 +114,18 @@ def test_unknown_provider_is_rejected() -> None:
 )
 def test_llm_provider_types_are_supported(provider: str) -> None:
     raw = _base_config()
-    raw["llm"] = {"provider": provider}
+    llm_section: dict[str, object] = {"provider": provider}
+    environ = _environ()
+    if provider == "production_api":
+        llm_section["azure"] = {
+            "endpoint": "https://example.openai.azure.com",
+            "deployment": "gpt-4o",
+            "api_key": "env:AZURE_OPENAI_API_KEY",
+        }
+        environ = {**environ, "AZURE_OPENAI_API_KEY": "dummy-key"}
+    raw["llm"] = llm_section
 
-    config = validate_config(raw, _environ())
+    config = validate_config(raw, environ)
 
     assert config.llm.provider == provider
 

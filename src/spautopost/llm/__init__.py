@@ -134,9 +134,8 @@ def build_llm_provider(config: LLMConfig, *, fixture: DraftOutput | None = None)
         from .azure_openai import AzureOpenAIProvider
 
         if config.azure is None:
-            raise LLMProviderError(
-                "llm.azure config is required when provider=production_api",
-                is_retryable=False,
+            raise LLMProviderConfigError(
+                "llm.azure config is required when provider=production_api"
             )
         return AzureOpenAIProvider(config.azure, prompt_version=config.prompt_version)
     raise LLMProviderConfigError(

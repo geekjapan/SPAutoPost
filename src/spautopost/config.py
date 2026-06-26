@@ -334,11 +334,24 @@ def _validate_azure_llm(
     llm_sec: Mapping[str, Any], provider: str, issues: list[str]
 ) -> AzureOpenAIConfig | None:
     azure_raw = llm_sec.get("azure")
-    if not isinstance(azure_raw, Mapping):
-        return None
+    if provider == "production_api":
+        if azure_raw is None:
+            issues.append("llm.azure is required when llm.provider is 'production_api'")
+            return None
+        if not isinstance(azure_raw, Mapping):
+            issues.append("llm.azure must be a mapping")
+            return None
+    else:
+        if not isinstance(azure_raw, Mapping):
+            return None
     sec = dict(azure_raw)
     endpoint = _opt_str(sec, "endpoint", "llm.azure.endpoint", issues) or ""
     deployment = _opt_str(sec, "deployment", "llm.azure.deployment", issues) or ""
+    if provider == "production_api":
+        if not endpoint:
+            issues.append("llm.azure.endpoint is required when llm.provider is 'production_api'")
+        if not deployment:
+            issues.append("llm.azure.deployment is required when llm.provider is 'production_api'")
     api_version = (
         _opt_str(sec, "api_version", "llm.azure.api_version", issues) or _AZURE_DEFAULT_API_VERSION
     )
@@ -347,6 +360,17 @@ def _validate_azure_llm(
         issues.append(f"llm.azure.auth_type must be one of {sorted(_AZURE_AUTH_TYPES)}")
         auth_type = "api_key"
     api_key_ref = _opt_str(sec, "api_key", "llm.azure.api_key", issues)
+    if provider == "production_api" and auth_type == "api_key":
+        if not api_key_ref:
+            issues.append(
+                "llm.azure.api_key is required when llm.provider is 'production_api'"
+                " and auth_type is 'api_key'"
+            )
+        elif not api_key_ref.startswith("env:"):
+            issues.append(
+                "llm.azure.api_key must be an env: reference (e.g. env:AZURE_OPENAI_API_KEY);"
+                " plaintext secrets are not allowed"
+            )
     timeout_secs_raw = sec.get("timeout_secs", _AZURE_DEFAULT_TIMEOUT_SECS)
     timeout_secs = _AZURE_DEFAULT_TIMEOUT_SECS
     if isinstance(timeout_secs_raw, int):
