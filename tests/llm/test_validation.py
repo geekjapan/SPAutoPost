@@ -72,7 +72,7 @@ def test_validation_result_has_warnings_false_when_no_warning_issues() -> None:
 
 
 def test_validation_result_sequences_are_always_tuples() -> None:
-    """__post_init__ がリストを渡しても tuple に強制変換することを確認する。"""
+    """リストを渡しても __post_init__ が tuple に強制変換することを確認する。"""
     issue = ValidationIssue(severity="error", code="c1", message="m1")
     result = ValidationResult(
         issues=[issue],
@@ -140,7 +140,7 @@ def test_required_sections_blank_only_required_actions_raises_error() -> None:
     errors = [
         i for i in result.issues if i.code == "missing_required_section" and i.severity == "error"
     ]
-    assert errors, "空文字列のみの required_actions は missing_required_section エラーを発行すること"
+    assert errors, "空文字列のみの required_actions はエラーを発行すること"
 
 
 def test_required_sections_whitespace_only_required_actions_raises_error() -> None:
@@ -148,7 +148,7 @@ def test_required_sections_whitespace_only_required_actions_raises_error() -> No
     errors = [
         i for i in result.issues if i.code == "missing_required_section" and i.severity == "error"
     ]
-    assert errors, "空白のみの required_actions は missing_required_section エラーを発行すること"
+    assert errors, "空白のみの required_actions はエラーを発行すること"
 
 
 # ---------------------------------------------------------------------------
@@ -256,7 +256,7 @@ def test_dangerous_detail_guardrail_hint_present_but_no_dangerous_text() -> None
 
 
 def test_dangerous_pattern_no_false_positive_on_epoch() -> None:
-    """re.ASCII により \\bpoc\\b が 'epoch' 内部の 'poc' にマッチしないことを確認する。"""
+    """再 ASCII フラグにより \\bpoc\\b が 'epoch' 内部の 'poc' にマッチしないことを確認する。"""
     result = validate_draft_output(_make_draft(title="Unix epoch timestamp の確認"))
     codes = {i.code for i in result.issues}
     assert "dangerous_detail_detected" not in codes
