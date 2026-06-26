@@ -71,6 +71,19 @@ def test_validation_result_has_warnings_false_when_no_warning_issues() -> None:
     assert result.has_warnings is False
 
 
+def test_validation_result_sequences_are_always_tuples() -> None:
+    """__post_init__ がリストを渡しても tuple に強制変換することを確認する。"""
+    issue = ValidationIssue(severity="error", code="c1", message="m1")
+    result = ValidationResult(
+        issues=[issue],
+        regeneration_hints=["hint"],
+        reviewer_warnings=["w"],
+    )
+    assert isinstance(result.issues, tuple)
+    assert isinstance(result.regeneration_hints, tuple)
+    assert isinstance(result.reviewer_warnings, tuple)
+
+
 # ---------------------------------------------------------------------------
 # required sections check
 # ---------------------------------------------------------------------------
@@ -122,6 +135,22 @@ def test_required_sections_empty_required_actions_raises_error() -> None:
     assert errors
 
 
+def test_required_sections_blank_only_required_actions_raises_error() -> None:
+    result = validate_draft_output(_make_draft(required_actions=("",)))
+    errors = [
+        i for i in result.issues if i.code == "missing_required_section" and i.severity == "error"
+    ]
+    assert errors, "空文字列のみの required_actions は missing_required_section エラーを発行すること"
+
+
+def test_required_sections_whitespace_only_required_actions_raises_error() -> None:
+    result = validate_draft_output(_make_draft(required_actions=("   ",)))
+    errors = [
+        i for i in result.issues if i.code == "missing_required_section" and i.severity == "error"
+    ]
+    assert errors, "空白のみの required_actions は missing_required_section エラーを発行すること"
+
+
 # ---------------------------------------------------------------------------
 # references check
 # ---------------------------------------------------------------------------
@@ -138,6 +167,18 @@ def test_references_empty_emits_warning() -> None:
     warnings = [i for i in result.issues if i.code == "no_references" and i.severity == "warning"]
     assert warnings
     assert warnings[0].reviewer_hint is not None
+
+
+def test_references_without_url_emits_warning() -> None:
+    result = validate_draft_output(_make_draft(references=({"label": "vendor"},)))
+    warnings = [i for i in result.issues if i.code == "no_references" and i.severity == "warning"]
+    assert warnings, "URL を持たない reference は no_references 警告を発行すること"
+
+
+def test_references_with_blank_url_emits_warning() -> None:
+    result = validate_draft_output(_make_draft(references=({"label": "vendor", "url": ""},)))
+    warnings = [i for i in result.issues if i.code == "no_references" and i.severity == "warning"]
+    assert warnings, "空の URL を持つ reference は no_references 警告を発行すること"
 
 
 # ---------------------------------------------------------------------------
@@ -212,6 +253,20 @@ def test_dangerous_detail_guardrail_hint_present_but_no_dangerous_text() -> None
     result = validate_draft_output(draft)
     codes = {i.code for i in result.issues}
     assert "dangerous_detail_detected" not in codes
+
+
+def test_dangerous_pattern_no_false_positive_on_epoch() -> None:
+    """re.ASCII により \\bpoc\\b が 'epoch' 内部の 'poc' にマッチしないことを確認する。"""
+    result = validate_draft_output(_make_draft(title="Unix epoch timestamp の確認"))
+    codes = {i.code for i in result.issues}
+    assert "dangerous_detail_detected" not in codes
+
+
+def test_dangerous_pattern_poc_adjacent_japanese_detected() -> None:
+    """re.ASCII により 'PoCが発見' のように日本語に隣接した PoC も検出されることを確認する。"""
+    result = validate_draft_output(_make_draft(title="PoCが発見されました"))
+    errors = [i for i in result.issues if i.code == "dangerous_detail_detected"]
+    assert errors, "日本語に隣接した PoC も検出されること"
 
 
 # ---------------------------------------------------------------------------

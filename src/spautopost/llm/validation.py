@@ -13,8 +13,10 @@ if TYPE_CHECKING:
 IssueSeverity = Literal["error", "warning", "info"]
 
 # 攻撃手順・PoC を示す検出パターン（英語・日本語）
+# re.ASCII により \b はASCII文字のみを基準に動作し、日本語に隣接する英語パターンを
+# 正しく検出しつつ "epoch"/"pocket" などへの誤検出を防ぐ
 _DANGEROUS_PATTERNS: tuple[re.Pattern[str], ...] = tuple(
-    re.compile(p, re.IGNORECASE)
+    re.compile(p, re.IGNORECASE | re.ASCII)
     for p in [
         r"\bexploit\s+code\b",
         r"\bproof\s+of\s+concept\b",
@@ -26,7 +28,6 @@ _DANGEROUS_PATTERNS: tuple[re.Pattern[str], ...] = tuple(
         r"攻撃手順",
         r"悪用コード",
         r"exploit\s*コード",
-        r"PoC",
     ]
 )
 
@@ -48,6 +49,11 @@ class ValidationResult:
     issues: Sequence[ValidationIssue] = field(default_factory=tuple)
     regeneration_hints: Sequence[str] = field(default_factory=tuple)
     reviewer_warnings: Sequence[str] = field(default_factory=tuple)
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "issues", tuple(self.issues))
+        object.__setattr__(self, "regeneration_hints", tuple(self.regeneration_hints))
+        object.__setattr__(self, "reviewer_warnings", tuple(self.reviewer_warnings))
 
     @property
     def has_errors(self) -> bool:
@@ -100,7 +106,10 @@ def _check_required_sections(draft: DraftOutput) -> list[ValidationIssue]:
                 )
             )
 
-    if not draft.required_actions:
+    # 空文字列のみのシーケンスも「空」として扱う
+    actions = draft.required_actions or ()
+    has_valid_action = any(isinstance(a, str) and a.strip() for a in actions)
+    if not has_valid_action:
         issues.append(
             ValidationIssue(
                 severity="error",
@@ -113,7 +122,12 @@ def _check_required_sections(draft: DraftOutput) -> list[ValidationIssue]:
 
 
 def _check_references(draft: DraftOutput) -> list[ValidationIssue]:
-    if draft.references:
+    refs = draft.references or ()
+    has_valid_url = any(
+        isinstance(r, dict) and isinstance(r.get("url"), str) and r["url"].strip()
+        for r in refs
+    )
+    if has_valid_url:
         return []
     return [
         ValidationIssue(
@@ -126,7 +140,8 @@ def _check_references(draft: DraftOutput) -> list[ValidationIssue]:
 
 
 def _check_unsupported_claims(draft: DraftOutput) -> list[ValidationIssue]:
-    has_guardrail = "guardrail:no_unsupported_claims" in draft.validation_hints
+    validation_hints = draft.validation_hints or ()
+    has_guardrail = "guardrail:no_unsupported_claims" in validation_hints
     has_warnings = bool(draft.warnings)
     if has_guardrail or has_warnings:
         return []
@@ -176,9 +191,10 @@ def _collect_text_fields(draft: DraftOutput) -> list[str]:
         if isinstance(value, str):
             texts.append(value)
     for seq in (draft.required_actions, draft.admin_actions):
-        for item in seq:
-            if isinstance(item, str):
-                texts.append(item)
+        if seq:
+            for item in seq:
+                if isinstance(item, str):
+                    texts.append(item)
     return texts
 
 

@@ -5,7 +5,7 @@
 システムは `ValidationIssue` および `ValidationResult` を frozen dataclass として定義しなければならない（SHALL）。
 
 - `ValidationIssue`: `severity: Literal["error", "warning", "info"]`, `code: str`, `message: str`, `reviewer_hint: str | None`
-- `ValidationResult`: `issues: Sequence[ValidationIssue]`, `has_errors: bool`, `has_warnings: bool`, `reviewer_warnings: Sequence[str]`
+- `ValidationResult`: `issues: Sequence[ValidationIssue]`, `regeneration_hints: Sequence[str]`, `reviewer_warnings: Sequence[str]`（`has_errors`・`has_warnings` は derived property、`__post_init__` で全シーケンスを tuple に強制）
 
 #### Scenario: ValidationResult が issues から has_errors を自動導出する
 - **WHEN** severity が "error" の `ValidationIssue` を含む `ValidationResult` を生成する
@@ -22,6 +22,7 @@
 対象フィールド: `title`, `summary_for_users`, `impact`, `required_actions`
 
 欠落または空文字列の場合は `code="missing_required_section"`, `severity="error"` の `ValidationIssue` を発行する。
+`required_actions` については、空シーケンスだけでなく空白のみの文字列しか含まないシーケンスも「空」として扱う。
 
 #### Scenario: 必須セクションがすべて存在する場合
 - **WHEN** title, summary_for_users, impact, required_actions がすべて非空の DraftOutput を検証する
@@ -35,19 +36,28 @@
 - **WHEN** required_actions が空リストの DraftOutput を検証する
 - **THEN** `code="missing_required_section"` かつ `severity="error"` の ValidationIssue が発行されること
 
+#### Scenario: required_actions が空白文字列のみを含む場合
+- **WHEN** required_actions が `('',)` や `('   ',)` のみの DraftOutput を検証する
+- **THEN** `code="missing_required_section"` かつ `severity="error"` の ValidationIssue が発行されること
+
 ### Requirement: references check（出典根拠チェック）
 
 `validate_draft_output` 関数は references が空の場合に警告を発行しなければならない（SHALL）。
 
 出典がない場合は `code="no_references"`, `severity="warning"` の `ValidationIssue` を発行し、`reviewer_hint` に「出典情報を確認してください」を設定する。
+`references` のシーケンス自体が非空でも、有効な `url` 文字列を持つエントリが 1 件もない場合は同様に警告を発行する。
 
 #### Scenario: references が存在する場合
-- **WHEN** references に 1 件以上のエントリを持つ DraftOutput を検証する
+- **WHEN** references に 1 件以上の有効な url を持つエントリを持つ DraftOutput を検証する
 - **THEN** `no_references` 警告が発行されないこと
 
 #### Scenario: references が空リストの場合
 - **WHEN** references が空リストの DraftOutput を検証する
 - **THEN** `code="no_references"` かつ `severity="warning"` の ValidationIssue が発行され、reviewer_hint が設定されること
+
+#### Scenario: references が url を持たないエントリのみの場合
+- **WHEN** references が `({'label': 'vendor'},)` のような url なしエントリの DraftOutput を検証する
+- **THEN** `code="no_references"` かつ `severity="warning"` の ValidationIssue が発行されること
 
 ### Requirement: unsupported claim check（根拠なし断定チェック）
 
@@ -55,6 +65,7 @@
 
 検出条件: `warnings` フィールドが空 かつ `validation_hints` に `guardrail:no_unsupported_claims` が含まれていない場合。
 発行する issue: `code="unsupported_claim_risk"`, `severity="warning"`, `reviewer_hint` に確認依頼を設定する。
+`validation_hints` が `None` の場合は空シーケンスとして扱う（防御的プログラミング）。
 
 #### Scenario: guardrail が設定済みの場合
 - **WHEN** validation_hints に "guardrail:no_unsupported_claims" を含む DraftOutput を検証する
@@ -72,8 +83,11 @@
 発行する issue: `code="dangerous_detail_detected"`, `severity="error"`, `reviewer_hint` に除去・差替依頼を設定する。
 
 検出パターン例（英日両方）:
-- `exploit code`, `proof of concept`, `poc`, `attack steps`, `payload`, `shell`, `reverse shell`
-- `攻撃手順`, `悪用コード`, `exploit コード`, `PoC`
+- `exploit code`, `proof of concept`, `poc`, `attack steps`, `payload`, `reverse shell`, `shellcode`
+- `攻撃手順`, `悪用コード`, `exploit コード`
+
+実装上の注意: `re.ASCII` フラグを使用し `\b` をASCII文字のみ基準の単語境界として動作させることで、
+日本語に隣接するパターン（`PoCが発見` 等）を正しく検出しつつ `epoch`/`pocket` 等への誤検出を防ぐ。
 
 #### Scenario: 攻撃手順を含まない通常の原稿
 - **WHEN** 攻撃手順・PoC に関するパターンを含まない DraftOutput を検証する
