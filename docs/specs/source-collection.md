@@ -19,6 +19,7 @@ Proposed
 - vendor advisory
 - RSS / Atom feed
 - external collector import
+- web_scrape (Firecrawl adapter、M1 optional)
 
 ## SourceAdapter Interface
 
@@ -228,6 +229,36 @@ retry policy:
 - raw hash
 - parser version
 
+## Firecrawl Adapter (web_scrape)
+
+目的:
+
+- URL 指定で任意の Web ページを Markdown として取得し、Advisory に変換する。
+- 構造化 API のない vendor advisory / blog 記事 / 公開セキュリティ情報に対応する。
+
+SourceType: `"web_scrape"`
+
+実装: `src/spautopost/firecrawl_adapter.py`、依存: `firecrawl-py>=4.0`（`[spike]` extra）
+
+設定項目:
+
+| 環境変数 | 必須 | デフォルト | 説明 |
+|----------|------|-----------|------|
+| `FIRECRAWL_API_KEY` | ✅ 必須 | — | Firecrawl API key（`fc-...` 形式） |
+| `FIRECRAWL_TIMEOUT_SECONDS` | 省略可 | 30 | スクレイプタイムアウト（秒） |
+| `FIRECRAWL_MAX_CONTENT_CHARS` | 省略可 | 5000 | `summary` に使う Markdown の最大文字数 |
+
+利用条件と制約:
+
+- API key は [firecrawl.dev](https://firecrawl.dev) で取得する（Free プランは ~500 pages/月）
+- スクレイピング対象サイトの利用規約を個別確認すること（オペレーター責任）
+- robots.txt を遵守すること
+- 構造化 API が存在するソース（NVD・JVN・CISA KEV）は公式 adapter を優先する
+- CVE ID・severity の自動抽出は M2 以降（LLM 連携が必要）
+- 取得コンテンツは Draft Composition と人間レビューを通じてサニタイズする
+
+採否判断: ✅ M1 optional で採用（詳細は `docs/spikes/firecrawl-adapter-spike.md` を参照）
+
 ## Related Issues
 
 - #7 Implement manual advisory input and validation
@@ -235,3 +266,4 @@ retry policy:
 - #12 Implement MyJVN adapter
 - #13 Define KEV and vendor advisory adapter interface
 - #21 Add scheduler and external collector import boundary
+- #34 [Spike] Evaluate Firecrawl source adapter
