@@ -735,6 +735,30 @@ def _optional_str(raw: Mapping[str, object], key: str) -> str | None:
 # --- default real transport ------------------------------------------------
 
 
+class _BlockRedirectHandler(urllib.request.HTTPRedirectHandler):
+    """Raise instead of following HTTP redirects.
+
+    urllib's default redirect handler copies the Authorization header to the
+    new request without rechecking the destination against the Graph allowlist,
+    which could forward a bearer token to an arbitrary HTTPS host via a
+    301/302/303 response. Blocking redirects entirely is the safest option for
+    an API client that exclusively talks to Graph.
+    """
+
+    def redirect_request(
+        self,
+        req: urllib.request.Request,
+        fp: object,
+        code: int,
+        msg: str,
+        headers: object,
+        newurl: str,
+    ) -> None:
+        raise GraphTransportError(
+            f"Graph transport: redirect to {newurl!r} blocked to prevent bearer token leakage"
+        )
+
+
 def urllib_transport(
     method: str,
     url: str,
@@ -755,8 +779,9 @@ def urllib_transport(
     request = urllib.request.Request(  # noqa: S310 (https enforced above)
         url, data=data, headers=request_headers, method=method
     )
+    opener = urllib.request.build_opener(_BlockRedirectHandler())
     try:
-        with urllib.request.urlopen(  # noqa: S310 (https enforced above)
+        with opener.open(  # noqa: S310 (https enforced above)
             request, timeout=HTTP_TIMEOUT_SECONDS
         ) as response:
             return GraphHttpResponse(
@@ -779,7 +804,7 @@ def _load_json(raw: bytes) -> Mapping[str, object]:
         return {}
     try:
         parsed = json.loads(raw)
-    except json.JSONDecodeError:
+    except (json.JSONDecodeError, UnicodeDecodeError):
         return {}
     return parsed if isinstance(parsed, Mapping) else {}
 

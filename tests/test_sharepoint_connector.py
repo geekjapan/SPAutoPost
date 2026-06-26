@@ -20,7 +20,9 @@ from spautopost.sharepoint_connector import (
     GraphTransportError,
     SharePointConnector,
     _ascii_slug,
+    _BlockRedirectHandler,
     _list_section,
+    _load_json,
     build_idempotency_key,
     build_site_page_payload,
     classify_graph_status,
@@ -649,3 +651,58 @@ def test_success_response_without_page_id_records_failure() -> None:
     assert outcome.publication.error_code == "publish_failed"
     assert outcome.publication.retryable is False
     assert outcome.publication.sharepoint_page_id is None
+
+
+@pytest.mark.unit
+def test_urllib_transport_blocks_redirects() -> None:
+    """A 301/302/303 response must raise GraphTransportError instead of following the redirect.
+
+    urllib's default redirect handler copies non-content headers — including
+    Authorization — to the new request without rechecking the destination host
+    against the Graph allowlist. Blocking redirects entirely prevents bearer
+    token leakage to arbitrary HTTPS origins.
+    """
+    import http.server
+    import threading
+    import urllib.request as _ur
+
+    class _RedirectHandler(http.server.BaseHTTPRequestHandler):
+        def do_POST(self) -> None:  # noqa: N802
+            self.send_response(301)
+            self.send_header("Location", "https://evil.example.com/steal")
+            self.end_headers()
+
+        def log_message(self, *_args: object) -> None:
+            pass
+
+    server = http.server.HTTPServer(("127.0.0.1", 0), _RedirectHandler)
+    port = server.server_address[1]
+    thread = threading.Thread(target=server.handle_request)
+    thread.start()
+    try:
+        with pytest.raises(GraphTransportError, match="redirect"):
+            opener = _ur.build_opener(_BlockRedirectHandler())
+            req = _ur.Request(
+                f"http://127.0.0.1:{port}/post",
+                data=b"{}",
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            opener.open(req, timeout=5)
+    finally:
+        thread.join(timeout=2)
+        server.server_close()
+
+
+@pytest.mark.unit
+def test_load_json_returns_empty_dict_for_non_utf8_bytes() -> None:
+    """Non-UTF-8 bytes must return an empty Mapping, not raise UnicodeDecodeError.
+
+    If Graph or an upstream gateway returns bytes that are not valid UTF-8,
+    json.loads raises UnicodeDecodeError. In the stored publish path that
+    exception would escape _create_page after a 'publishing' reservation has
+    been written, leaving the idempotency key permanently stuck as a duplicate.
+    """
+    # 0xFF is not valid UTF-8; json.loads raises UnicodeDecodeError for it.
+    result = _load_json(b"\xff\xfe invalid utf-8")
+    assert result == {}
