@@ -68,6 +68,7 @@ class FirecrawlSourceAdapter:
         )
 
     def validate_config(self) -> AdapterStatus:
+        """FIRECRAWL_API_KEY の存在を検査し AdapterStatus を返す。"""
         if not self._api_key:
             return AdapterStatus(False, "missing_api_key", "FIRECRAWL_API_KEY is not set")
         return AdapterStatus(True)
@@ -75,6 +76,7 @@ class FirecrawlSourceAdapter:
     def fetch(
         self, query: SourceFetchQuery | None = None, *, now: datetime | None = None
     ) -> Sequence[SourceDocument]:
+        """query.url を Firecrawl API でスクレイプし SourceDocument を返す。"""
         if query is None or not query.url:
             return ()
 
@@ -122,6 +124,7 @@ class FirecrawlSourceAdapter:
     def normalize(
         self, document: SourceDocument, *, now: datetime | None = None
     ) -> Sequence[Advisory]:
+        """SourceDocument の Markdown / metadata を Advisory に写像する。"""
         raw = document.raw_payload
         timestamp = _utc_now(now)
 
