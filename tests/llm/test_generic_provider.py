@@ -8,8 +8,8 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from spautopost.config import LLMConfig
-from spautopost.llm import DraftInput, LLMProvider, build_llm_provider
-from spautopost.llm.generic_provider import GenericApiLLMProvider, LLMProviderError
+from spautopost.llm import DraftInput, LLMProvider, LLMProviderError, build_llm_provider
+from spautopost.llm.generic_provider import GenericApiLLMProvider
 
 # ---------------------------------------------------------------------------
 # helpers
@@ -247,11 +247,11 @@ class TestGenerateDraftSecurity:
             provider.generate_draft(_draft_input())
 
         assert captured_headers
-        # Authorization ヘッダが含まれている（値は確認しない）
-        has_auth = any(
-            "Authorization" in k or "authorization" in k.lower() for k in captured_headers[0]
+        auth_value = next(
+            (value for key, value in captured_headers[0].items() if key.lower() == "authorization"),
+            None,
         )
-        assert has_auth
+        assert auth_value == "Bearer sk-test-token"
 
 
 # ---------------------------------------------------------------------------

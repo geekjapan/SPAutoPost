@@ -350,6 +350,13 @@ def _validate_llm(raw: Mapping[str, Any], issues: list[str]) -> LLMConfig:
             "obtain information-security department approval first "
             "(see docs/specs/llm-provider.md)"
         )
+    if provider == "generic_api":
+        if not endpoint_url:
+            issues.append("llm.endpoint_url is required when llm.provider=generic_api")
+        if not model:
+            issues.append("llm.model is required when llm.provider=generic_api")
+        if not auth_env_var:
+            issues.append("llm.auth_env_var is required when llm.provider=generic_api")
     return LLMConfig(
         provider=provider if isinstance(provider, str) else "",
         prompt_version=prompt_version,

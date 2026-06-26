@@ -19,6 +19,7 @@ from spautopost.llm import (
     DraftInput,
     DraftOutput,
     LLMProviderConfigError,
+    LLMProviderError,
     ProviderMetadata,
     ProviderStatus,
 )
@@ -75,14 +76,6 @@ _ALLOWED_ADVISORY_FIELDS = frozenset(
         "references",
     }
 )
-
-
-class LLMProviderError(Exception):
-    """LLM API 呼び出しの失敗。Secret 値はメッセージに含めない。"""
-
-    def __init__(self, message: str, *, retryable: bool) -> None:
-        super().__init__(message)
-        self.retryable = retryable
 
 
 class GenericApiLLMProvider:
@@ -167,6 +160,14 @@ class GenericApiLLMProvider:
         payload = _build_payload(self._config.model or "", draft_input)
         data = json.dumps(payload, ensure_ascii=False).encode("utf-8")
         endpoint = self._config.endpoint_url or ""
+        if endpoint.startswith("env:"):
+            env_name = endpoint[len("env:") :]
+            endpoint = os.environ.get(env_name, "")
+            if not endpoint:
+                raise LLMProviderError(
+                    f"env var {env_name!r} referenced by llm.endpoint_url is not set",
+                    retryable=False,
+                )
         req = urllib.request.Request(  # noqa: S310
             endpoint,
             data=data,
@@ -186,9 +187,14 @@ class GenericApiLLMProvider:
                 f"HTTP {exc.code} from LLM API",
                 retryable=retryable,
             ) from exc
-        except urllib.error.URLError as exc:
+        except TimeoutError as exc:
             raise LLMProviderError(
-                f"network error calling LLM API: {exc.reason}",
+                f"timeout calling LLM API: {exc}",
+                retryable=True,
+            ) from exc
+        except (urllib.error.URLError, OSError) as exc:
+            raise LLMProviderError(
+                f"network error calling LLM API: {exc}",
                 retryable=True,
             ) from exc
         return _parse_body(body, draft_input)
@@ -245,12 +251,32 @@ def _safe_references(refs: object) -> list[dict[str, str]]:
 def _safe_advisory(advisory: object) -> dict[str, object]:
     """advisory から送信許可フィールドのみ抽出する（禁止情報を除外）。"""
     if isinstance(advisory, Mapping):
-        return {k: v for k, v in advisory.items() if k in _ALLOWED_ADVISORY_FIELDS}
+        filtered: dict[str, object] = {
+            k: v for k, v in advisory.items() if k in _ALLOWED_ADVISORY_FIELDS
+        }
+        if "references" in filtered:
+            filtered["references"] = _safe_references(filtered["references"])
+        return filtered
     if isinstance(advisory, Sequence) and not isinstance(advisory, str | bytes | bytearray):
         first = next(iter(advisory), None)
         if isinstance(first, Mapping):
-            return {k: v for k, v in first.items() if k in _ALLOWED_ADVISORY_FIELDS}
+            filtered = {k: v for k, v in first.items() if k in _ALLOWED_ADVISORY_FIELDS}
+            if "references" in filtered:
+                filtered["references"] = _safe_references(filtered["references"])
+            return filtered
     return {}
+
+
+_REQUIRED_DRAFT_FIELDS = frozenset({"title", "summary_for_users", "impact", "required_actions"})
+
+
+def _validate_draft_fields(data: dict[str, Any]) -> None:
+    missing = [f for f in _REQUIRED_DRAFT_FIELDS if not data.get(f)]
+    if missing:
+        raise LLMProviderError(
+            f"LLM response missing required fields: {sorted(missing)}",
+            retryable=False,
+        )
 
 
 def _parse_body(body: bytes, draft_input: DraftInput) -> DraftOutput:
@@ -258,16 +284,21 @@ def _parse_body(body: bytes, draft_input: DraftInput) -> DraftOutput:
     try:
         api_resp = json.loads(body)
         content = api_resp["choices"][0]["message"]["content"]
-        output_data: dict[str, Any] = json.loads(content)
+        output_data = json.loads(content)
+        if not isinstance(output_data, dict):
+            raise TypeError("parsed content is not a JSON object")
     except (json.JSONDecodeError, KeyError, IndexError, TypeError) as exc:
         raise LLMProviderError(
             f"failed to parse LLM API response: {type(exc).__name__}",
             retryable=False,
         ) from None
+    _validate_draft_fields(output_data)
     return _build_draft_output(output_data, draft_input)
 
 
 def _build_draft_output(data: dict[str, Any], draft_input: DraftInput) -> DraftOutput:
+    from spautopost.llm.templates import _input_hash  # local import to avoid circular dep
+
     def _seq(key: str) -> tuple[Any, ...]:
         val = data.get(key, ())
         if isinstance(val, Sequence) and not isinstance(val, str | bytes | bytearray):
@@ -293,6 +324,7 @@ def _build_draft_output(data: dict[str, Any], draft_input: DraftInput) -> DraftO
             "guardrail:no_attack_steps_or_poc",
             "human_review_required",
         ),
+        generation_input_hash=_input_hash(draft_input),
     )
 
 

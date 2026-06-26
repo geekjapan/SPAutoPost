@@ -22,6 +22,14 @@ class LLMProviderConfigError(ValueError):
     """LLM provider 設定または構築の失敗。Secret 値は含めない。"""
 
 
+class LLMProviderError(Exception):
+    """LLM API 呼び出しの失敗。Secret 値はメッセージに含めない。"""
+
+    def __init__(self, message: str, *, retryable: bool) -> None:
+        super().__init__(message)
+        self.retryable = retryable
+
+
 @dataclass(frozen=True)
 class DraftInput:
     """LLM provider に渡す掲示板原稿生成入力。"""
@@ -134,6 +142,7 @@ __all__ = [
     "DraftOutput",
     "LLMProvider",
     "LLMProviderConfigError",
+    "LLMProviderError",
     "MockLLMProvider",
     "ProviderMetadata",
     "ProviderStatus",

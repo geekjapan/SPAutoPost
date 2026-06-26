@@ -133,6 +133,14 @@ def test_production_providers_require_production_approved(provider: str) -> None
 def test_production_providers_accepted_when_production_approved_true(provider: str) -> None:
     raw = _base_config()
     raw["llm"] = {"provider": provider, "production_approved": True}
+    if provider == "generic_api":
+        raw["llm"].update(  # type: ignore[union-attr]
+            {
+                "endpoint_url": "https://api.example.test/v1/chat/completions",
+                "model": "gpt-4o",
+                "auth_env_var": "LLM_API_KEY",
+            }
+        )
 
     config = validate_config(raw, _environ())
 

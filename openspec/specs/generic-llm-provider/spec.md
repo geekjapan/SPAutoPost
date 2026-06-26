@@ -1,7 +1,7 @@
 # generic-llm-provider Specification
 
 ## Purpose
-TBD - created by archiving change issue-17-generic-llm-provider. Update Purpose after archive.
+OpenAI-compatible REST API を設定で有効化する generic_api LLM provider を定義する。Bearer token 認証・リトライ・input sanitization・監査メタデータを提供する。
 ## Requirements
 ### Requirement: generic_api provider を設定で有効化できる
 
@@ -13,6 +13,7 @@ TBD - created by archiving change issue-17-generic-llm-provider. Update Purpose 
 - `auth_env_var: str | None` — Bearer token を取得する環境変数名
 - `timeout_seconds: int` — HTTP タイムアウト秒数（default 30）
 - `max_retries: int` — 最大リトライ回数（default 3）
+- `provider_name: str | None` — 監査ログ用 provider 名（default: "generic-api"）
 
 #### Scenario: generic_api provider が構築される
 
@@ -22,6 +23,16 @@ TBD - created by archiving change issue-17-generic-llm-provider. Update Purpose 
 #### Scenario: validate_config が設定の構造的正当性を確認する
 
 - **WHEN** `endpoint_url` が None または空文字列のまま `validate_config()` を呼ぶ
+- **THEN** `valid=False` と問題のリストを含む `ProviderStatus` が返される
+
+#### Scenario: model 未設定時に validation が失敗する
+
+- **WHEN** `model` が None または空文字列のまま `validate_config()` を呼ぶ
+- **THEN** `valid=False` と問題のリストを含む `ProviderStatus` が返される
+
+#### Scenario: auth_env_var 未設定時に validation が失敗する
+
+- **WHEN** `auth_env_var` が None または空文字列のまま `validate_config()` を呼ぶ
 - **THEN** `valid=False` と問題のリストを含む `ProviderStatus` が返される
 
 ### Requirement: request は DraftInput から OpenAI-compatible メッセージに変換する
