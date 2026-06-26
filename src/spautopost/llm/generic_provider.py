@@ -110,10 +110,17 @@ class GenericApiLLMProvider:
     def validate_config(self) -> ProviderStatus:
         """設定の構造的正当性を確認する（実 API 呼び出しなし）。"""
         issues: list[str] = []
-        if not self._config.endpoint_url:
+        endpoint = self._config.endpoint_url
+        if not endpoint:
             issues.append("llm.endpoint_url is required for generic_api provider")
-        elif not self._config.endpoint_url.startswith("https://"):
-            issues.append("llm.endpoint_url must use https:// to protect Bearer token in transit")
+        else:
+            if endpoint.startswith("env:"):
+                env_name = endpoint[len("env:") :]
+                endpoint = os.environ.get(env_name, "")
+            if endpoint and not endpoint.startswith("https://"):
+                issues.append(
+                    "llm.endpoint_url must use https:// to protect Bearer token in transit"
+                )
         if not self._config.model:
             issues.append("llm.model is required for generic_api provider")
         if not self._config.auth_env_var:
@@ -146,12 +153,15 @@ class GenericApiLLMProvider:
     # ------------------------------------------------------------------
 
     def _call_with_retry(self, draft_input: DraftInput, token: str) -> DraftOutput:
+        import time
+
         for attempt in range(self._config.max_retries + 1):
             try:
                 return self._attempt(draft_input, token)
             except LLMProviderError as exc:
                 if not exc.retryable or attempt >= self._config.max_retries:
                     raise
+                time.sleep(1)
         # max_retries >= 0 保証（config validation 済み）かつ retryable=True の場合、
         # ループ内で必ず raise されるためここには到達しない
         raise AssertionError("unreachable")
@@ -196,6 +206,11 @@ class GenericApiLLMProvider:
             raise LLMProviderError(
                 f"network error calling LLM API: {exc}",
                 retryable=True,
+            ) from exc
+        except ValueError as exc:
+            raise LLMProviderError(
+                f"invalid request or URL: {exc}",
+                retryable=False,
             ) from exc
         return _parse_body(body, draft_input)
 
@@ -271,7 +286,7 @@ _REQUIRED_DRAFT_FIELDS = frozenset({"title", "summary_for_users", "impact", "req
 
 
 def _validate_draft_fields(data: dict[str, Any]) -> None:
-    missing = [f for f in _REQUIRED_DRAFT_FIELDS if not data.get(f)]
+    missing = [f for f in _REQUIRED_DRAFT_FIELDS if f not in data or data[f] is None]
     if missing:
         raise LLMProviderError(
             f"LLM response missing required fields: {sorted(missing)}",
