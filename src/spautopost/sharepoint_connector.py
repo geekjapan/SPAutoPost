@@ -25,6 +25,7 @@ import urllib.error
 import urllib.request
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
+from dataclasses import replace as _dc_replace
 from datetime import UTC, datetime
 from typing import Protocol
 from uuid import uuid4
@@ -184,6 +185,21 @@ class SharePointConnector:
                     "required_field_missing",
                     f"draft {draft.draft_id} is missing required content for {heading}",
                 )
+        # draft-composition.md §Validation Rules also requires non-empty required_actions
+        # and at least one reference with a valid URL (https:// or http://).
+        if not any(isinstance(item, str) and item.strip() for item in draft.required_actions):
+            raise ConnectorError(
+                "required_field_missing",
+                f"draft {draft.draft_id} has no required_actions",
+            )
+        if not any(
+            isinstance(ref, Mapping) and str(ref.get("url", "")).startswith(_ALLOWED_URL_SCHEMES)
+            for ref in draft.references
+        ):
+            raise ConnectorError(
+                "required_field_missing",
+                f"draft {draft.draft_id} has no valid references",
+            )
 
     def _existing_duplicate(self, key: str) -> Publication | None:
         if self.store is None:
@@ -270,9 +286,14 @@ class SharePointConnector:
         approver: str | None,
         publisher_principal: str | None,
     ) -> PublishOutcome:
-        # Reserve the idempotency key atomically before calling Graph so that
-        # concurrent workers sharing the same store cannot both pass the
-        # _existing_duplicate check and each create a separate SharePoint page.
+        # Phase 1: Claim the idempotency key atomically before any Graph call.
+        # create_if_absent handles absent keys; for existing "failed"/"dry_run" rows we
+        # additionally upsert to "publishing" so a concurrent retry worker sees the row
+        # in-flight and returns duplicate_detected rather than issuing another POST.
+        # claim_id is the publication_id of the row we own; the real storage backend
+        # upserts by publication_id (PK), so reusing it avoids a UNIQUE violation on
+        # idempotency_key when we persist the final "published"/"failed" outcome.
+        claim_id: str | None = None
         if self.store is not None:
             reservation = Publication(
                 publication_id=self.id_factory(),
@@ -287,10 +308,21 @@ class SharePointConnector:
                 operation="create",
             )
             existing, created = self.store.publications.create_if_absent(reservation)
-            if not created and existing.publication_status in {"published", "publishing"}:
+            if created:
+                claim_id = reservation.publication_id
+            elif existing.publication_status in {"published", "publishing"}:
                 return self._record_duplicate(
                     existing, key, advisory_ids, now, correlation, approver, publisher_principal
                 )
+            else:
+                # Existing "failed" (or "dry_run") row — transition it to "publishing"
+                # to claim the slot before proceeding, using the same publication_id so
+                # the subsequent upsert updates in-place rather than inserting a new row.
+                self.store.publications.upsert(
+                    _dc_replace(existing, publication_status="publishing", updated_at=now)
+                )
+                claim_id = existing.publication_id
+
         payload = build_site_page_payload(draft)
         url = f"{self.base_url}/sites/{self.site_id}/pages"
         headers = {"Authorization": f"Bearer {self.token_provider()}"}
@@ -308,6 +340,7 @@ class SharePointConnector:
                 error_code="graph_timeout",
                 retryable=True,
                 status=None,
+                claim_id=claim_id,
             )
 
         if response.status in (200, 201):
@@ -317,7 +350,7 @@ class SharePointConnector:
             # operation="create" preserving the create-vs-promote distinction. News
             # promote (Graph /publish, operation="publish") is deferred to #20/#32.
             publication = Publication(
-                publication_id=self.id_factory(),
+                publication_id=claim_id or self.id_factory(),
                 draft_id=draft.draft_id,
                 target_type="site-page",
                 target_site_id=self.site_id,
@@ -359,6 +392,7 @@ class SharePointConnector:
             error_code=error_code,
             retryable=retryable,
             status=response.status,
+            claim_id=claim_id,
         )
 
     def _record_failure(
@@ -374,6 +408,7 @@ class SharePointConnector:
         error_code: str,
         retryable: bool,
         status: int | None,
+        claim_id: str | None = None,
     ) -> PublishOutcome:
         # Secret-free message: only the canonical code and HTTP status, never the
         # token or raw Graph body (which may echo request headers).
@@ -383,7 +418,7 @@ class SharePointConnector:
             else "SharePoint create failed (transport error)"
         )
         publication = Publication(
-            publication_id=self.id_factory(),
+            publication_id=claim_id or self.id_factory(),
             draft_id=draft.draft_id,
             target_type="site-page",
             target_site_id=self.site_id,

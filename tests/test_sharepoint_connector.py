@@ -101,7 +101,20 @@ class _PublicationsFake:
         return publication, True
 
     def upsert(self, publication: Publication) -> Publication:
-        self._by_key[publication.idempotency_key] = publication
+        # Mirror real _PublicationRepository.upsert: update by PK when found,
+        # else insert (which would UNIQUE-fail if idempotency_key already exists).
+        existing_by_id = next(
+            (p for p in self._by_key.values() if p.publication_id == publication.publication_id),
+            None,
+        )
+        if existing_by_id is not None:
+            self._by_key[existing_by_id.idempotency_key] = publication
+        else:
+            if publication.idempotency_key in self._by_key:
+                raise ValueError(
+                    f"upsert: UNIQUE violation on idempotency_key={publication.idempotency_key!r}"
+                )
+            self._by_key[publication.idempotency_key] = publication
         return publication
 
 
@@ -431,3 +444,73 @@ def test_references_none_label_falls_back_to_url() -> None:
     rendered = render_page_html(draft)
     assert "None" not in rendered
     assert "https://example.com/doc" in rendered
+
+
+@pytest.mark.unit
+def test_empty_required_actions_is_rejected() -> None:
+    connector = _connector(_exploding_transport)
+    with pytest.raises(ConnectorError) as exc:
+        connector.publish_draft(_approved_draft(required_actions=()))
+    assert exc.value.error_code == "required_field_missing"
+
+
+@pytest.mark.unit
+def test_whitespace_only_required_action_is_rejected() -> None:
+    connector = _connector(_exploding_transport)
+    with pytest.raises(ConnectorError) as exc:
+        connector.publish_draft(_approved_draft(required_actions=("   ",)))
+    assert exc.value.error_code == "required_field_missing"
+
+
+@pytest.mark.unit
+def test_empty_references_is_rejected() -> None:
+    connector = _connector(_exploding_transport)
+    with pytest.raises(ConnectorError) as exc:
+        connector.publish_draft(_approved_draft(references=()))
+    assert exc.value.error_code == "required_field_missing"
+
+
+@pytest.mark.unit
+def test_references_without_valid_url_is_rejected() -> None:
+    connector = _connector(_exploding_transport)
+    with pytest.raises(ConnectorError) as exc:
+        connector.publish_draft(
+            _approved_draft(references=({"label": "bad", "url": "javascript:void(0)"},))
+        )
+    assert exc.value.error_code == "required_field_missing"
+
+
+@pytest.mark.unit
+def test_claim_id_is_reused_after_failed_row_on_successful_retry() -> None:
+    """Final publication must carry the same publication_id as the failed-row claim."""
+    store = _StoreFake()
+    draft = _approved_draft()
+    key = build_idempotency_key(
+        draft_id=draft.draft_id,
+        site_id=SITE_ID,
+        page_library_id=PAGE_LIBRARY_ID,
+        advisory_ids=draft.advisory_ids,
+        title=draft.title,
+    )
+    original_id = "original-failed-id"
+    store.publications._by_key[key] = Publication(
+        publication_id=original_id,
+        draft_id=draft.draft_id,
+        target_type="site-page",
+        target_site_id=SITE_ID,
+        publication_status="failed",
+        idempotency_key=key,
+        created_at=NOW,
+        updated_at=NOW,
+        error_code="graph_timeout",
+        retryable=True,
+        operation="create",
+    )
+    transport = _FakeTransport(GraphHttpResponse(status=201, body={"id": "page-claim-retry"}))
+    outcome = _connector(transport, store=store).publish_draft(draft)
+
+    assert outcome.publication.publication_id == original_id
+    stored = store.publications.get_by_idempotency_key(key)
+    assert stored is not None
+    assert stored.publication_id == original_id
+    assert stored.publication_status == "published"
