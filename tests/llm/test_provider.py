@@ -84,7 +84,7 @@ def test_build_llm_provider_selects_test_mock() -> None:
 
 
 @pytest.mark.parametrize(
-    "provider", ["production_api", "production_flow", "generic_api", "test_manual"]
+    "provider", ["production_flow", "generic_api", "test_manual"]
 )
 def test_build_llm_provider_rejects_unimplemented_provider_types(provider: str) -> None:
     with pytest.raises(LLMProviderConfigError) as excinfo:

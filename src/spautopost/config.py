@@ -28,7 +28,7 @@ _SECTION_KEYS: dict[str, frozenset[str]] = {
     "app": frozenset({"environment", "dry_run", "log_level"}),
     "server": frozenset({"admin_ui_enabled", "admin_api_enabled", "auth_provider"}),
     "storage": frozenset({"provider", "database_url", "sqlite_path"}),
-    "llm": frozenset({"provider", "prompt_version"}),
+    "llm": frozenset({"provider", "prompt_version", "azure"}),
     "sharepoint": frozenset(
         {
             "mode",
@@ -83,10 +83,31 @@ class SecurityConfig:
     redact_secrets_in_logs: bool
 
 
+_AZURE_AUTH_TYPES = frozenset({"api_key", "managed_identity"})
+_AZURE_DEFAULT_API_VERSION = "2024-02-01"
+_AZURE_DEFAULT_TIMEOUT_SECS = 60
+_AZURE_DEFAULT_MAX_RETRIES = 3
+
+
+@dataclass(frozen=True)
+class AzureOpenAIConfig:
+    """Azure OpenAI / Foundry provider の設定。"""
+
+    endpoint: str
+    deployment: str
+    api_version: str
+    auth_type: str
+    api_key_ref: str | None
+    timeout_secs: int
+    max_retries: int
+    production_approved: bool
+
+
 @dataclass(frozen=True)
 class LLMConfig:
     provider: str
     prompt_version: str | None
+    azure: AzureOpenAIConfig | None = None
 
 
 @dataclass(frozen=True)
@@ -301,9 +322,55 @@ def _validate_llm(raw: Mapping[str, Any], issues: list[str]) -> LLMConfig:
     if provider not in LLM_PROVIDERS:
         issues.append(f"llm.provider must be one of {sorted(LLM_PROVIDERS)}")
     prompt_version = _opt_str(sec, "prompt_version", "llm.prompt_version", issues)
+    azure = _validate_azure_llm(sec, str(provider) if isinstance(provider, str) else "", issues)
     return LLMConfig(
         provider=provider if isinstance(provider, str) else "",
         prompt_version=prompt_version,
+        azure=azure,
+    )
+
+
+def _validate_azure_llm(
+    llm_sec: Mapping[str, Any], provider: str, issues: list[str]
+) -> AzureOpenAIConfig | None:
+    azure_raw = llm_sec.get("azure")
+    if not isinstance(azure_raw, Mapping):
+        return None
+    sec = dict(azure_raw)
+    endpoint = _opt_str(sec, "endpoint", "llm.azure.endpoint", issues) or ""
+    deployment = _opt_str(sec, "deployment", "llm.azure.deployment", issues) or ""
+    api_version = (
+        _opt_str(sec, "api_version", "llm.azure.api_version", issues) or _AZURE_DEFAULT_API_VERSION
+    )
+    auth_type = _opt_str(sec, "auth_type", "llm.azure.auth_type", issues) or "api_key"
+    if auth_type not in _AZURE_AUTH_TYPES:
+        issues.append(f"llm.azure.auth_type must be one of {sorted(_AZURE_AUTH_TYPES)}")
+        auth_type = "api_key"
+    api_key_ref = _opt_str(sec, "api_key", "llm.azure.api_key", issues)
+    timeout_secs_raw = sec.get("timeout_secs", _AZURE_DEFAULT_TIMEOUT_SECS)
+    timeout_secs = _AZURE_DEFAULT_TIMEOUT_SECS
+    if isinstance(timeout_secs_raw, int):
+        timeout_secs = timeout_secs_raw
+    elif timeout_secs_raw is not None:
+        issues.append("llm.azure.timeout_secs must be an integer")
+    max_retries_raw = sec.get("max_retries", _AZURE_DEFAULT_MAX_RETRIES)
+    max_retries = _AZURE_DEFAULT_MAX_RETRIES
+    if isinstance(max_retries_raw, int):
+        max_retries = max_retries_raw
+    elif max_retries_raw is not None:
+        issues.append("llm.azure.max_retries must be an integer")
+    production_approved = _bool(
+        sec, "production_approved", False, "llm.azure.production_approved", issues
+    )
+    return AzureOpenAIConfig(
+        endpoint=endpoint,
+        deployment=deployment,
+        api_version=api_version,
+        auth_type=auth_type,
+        api_key_ref=api_key_ref,
+        timeout_secs=timeout_secs,
+        max_retries=max_retries,
+        production_approved=production_approved,
     )
 
 
