@@ -57,6 +57,7 @@ ignore_missing_imports = true
 [tool.pytest.ini_options]
 addopts = "-q"
 testpaths = ["tests"]
+pythonpath = ["src"]
 markers = [
   "unit: unit tests",
   "integration: integration tests",
