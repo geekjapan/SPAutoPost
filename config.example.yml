@@ -23,12 +23,15 @@ llm:
   prompt_version: v1
 
 sharepoint:
-  mode: site-page # site-page | list
+  mode: site-page # site-page のみ対応（M1）
   default_draft: true
   allow_publish: false # true にする場合 security.require_approval も true が必要
   tenant_id: env:SPAUTOPOST_TENANT_ID
   site_id: env:SPAUTOPOST_SHAREPOINT_SITE_ID
   page_library_id: env:SPAUTOPOST_SHAREPOINT_PAGE_LIBRARY_ID
+  dedicated_site: true # M1 は専用サイトのみ対応
+  news_promote: false # M1 は News promote 未実装
+  idempotency_scope: site-and-page-library
 
 sources:
   manual:

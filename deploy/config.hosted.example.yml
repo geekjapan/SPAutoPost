@@ -31,6 +31,9 @@ sharepoint:
   tenant_id: env:SPAUTOPOST_TENANT_ID
   site_id: env:SPAUTOPOST_SHAREPOINT_SITE_ID
   page_library_id: env:SPAUTOPOST_SHAREPOINT_PAGE_LIBRARY_ID
+  dedicated_site: true # M1 は専用サイトのみ対応
+  news_promote: false # M1 は News promote 未実装
+  idempotency_scope: site-and-page-library
 
 graph:
   local_poc_auth: delegated
