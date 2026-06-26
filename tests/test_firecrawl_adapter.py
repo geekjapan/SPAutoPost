@@ -146,8 +146,31 @@ def test_fetch_returns_source_document(adapter_with_key: FirecrawlSourceAdapter)
     doc = documents[0]
     assert doc.source_record.source_type == "web_scrape"
     assert doc.source_record.source_url == SAMPLE_URL
+    assert doc.source_record.http_status == 200
     assert doc.raw_payload["markdown"] == SAMPLE_MARKDOWN
     assert doc.raw_payload["metadata"] == SAMPLE_METADATA
+
+
+def test_fetch_uses_status_code_from_metadata(adapter_with_key: FirecrawlSourceAdapter) -> None:
+    mock_result = _make_mock_result(metadata={"title": "Test", "sourceURL": SAMPLE_URL, "statusCode": 404})
+    mock_firecrawl = MagicMock()
+    mock_firecrawl.V1FirecrawlApp.return_value.scrape_url.return_value = mock_result
+
+    with patch.dict("sys.modules", {"firecrawl": mock_firecrawl}):
+        documents = adapter_with_key.fetch(SourceFetchQuery(url=SAMPLE_URL), now=NOW)
+
+    assert documents[0].source_record.http_status == 404
+
+
+def test_fetch_defaults_http_status_to_200_when_missing(adapter_with_key: FirecrawlSourceAdapter) -> None:
+    mock_result = _make_mock_result(metadata={"title": "Test", "sourceURL": SAMPLE_URL})
+    mock_firecrawl = MagicMock()
+    mock_firecrawl.V1FirecrawlApp.return_value.scrape_url.return_value = mock_result
+
+    with patch.dict("sys.modules", {"firecrawl": mock_firecrawl}):
+        documents = adapter_with_key.fetch(SourceFetchQuery(url=SAMPLE_URL), now=NOW)
+
+    assert documents[0].source_record.http_status == 200
 
 
 def test_fetch_returns_empty_when_no_url(adapter_with_key: FirecrawlSourceAdapter) -> None:

@@ -100,10 +100,11 @@ class FirecrawlSourceAdapter:
         if result is None:
             raise SourceAdapterError("Firecrawl scrape_url returned None")
 
+        _metadata = result.metadata or {}
         raw_payload: dict[str, object] = {
             "url": query.url,
             "markdown": result.markdown or "",
-            "metadata": result.metadata or {},
+            "metadata": _metadata,
             "title": result.title or "",
         }
         raw_hash = _hash_json(raw_payload)
@@ -117,7 +118,7 @@ class FirecrawlSourceAdapter:
             raw_hash=raw_hash,
             parser_version=FIRECRAWL_PARSER_VERSION,
             created_at=timestamp,
-            http_status=200,
+            http_status=int(_metadata.get("statusCode") or 200),
         )
         return (SourceDocument(source_record=source_record, raw_payload=raw_payload),)
 
