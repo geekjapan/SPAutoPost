@@ -8,7 +8,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from spautopost.firecrawl_adapter import FirecrawlSourceAdapter
-from spautopost.source_adapters import SourceAdapterError, SourceFetchQuery
+from spautopost.source_adapters import SourceAdapterError, SourceDocument, SourceFetchQuery
 
 NOW = datetime(2026, 6, 26, 12, 0, tzinfo=UTC)
 SAMPLE_URL = "https://example.com/security-advisory"
@@ -57,22 +57,20 @@ def _make_document(
     markdown: str = SAMPLE_MARKDOWN,
     metadata: dict | None = None,
     url: str = SAMPLE_URL,
-) -> object:
-    raw_payload: dict = {
+) -> SourceDocument:
+    raw_payload: dict[str, object] = {
         "url": url,
         "markdown": markdown,
         "metadata": metadata if metadata is not None else SAMPLE_METADATA,
         "title": (metadata or SAMPLE_METADATA).get("title", ""),
     }
-    from spautopost.source_adapters import SourceDocument, SourceFetchQuery, _hash_json, _utc_now
+    from spautopost.source_adapters import _hash_json
     from spautopost.storage.models import SourceRecord
-    from typing import cast
-    from spautopost.storage.models import SourceType
 
     raw_hash = _hash_json(raw_payload)
     record = SourceRecord(
         source_record_id=f"firecrawl-{raw_hash[:12]}",
-        source_type=cast(SourceType, "web_scrape"),
+        source_type="web_scrape",
         source_name="firecrawl",
         source_url=url,
         retrieved_at=NOW,
@@ -86,7 +84,7 @@ def _make_document(
 
 def test_normalize_maps_title_and_summary(adapter_with_key: FirecrawlSourceAdapter) -> None:
     document = _make_document(adapter_with_key)
-    advisories = adapter_with_key.normalize(document, now=NOW)  # type: ignore[arg-type]
+    advisories = adapter_with_key.normalize(document, now=NOW)
 
     assert len(advisories) == 1
     advisory = advisories[0]
@@ -106,7 +104,7 @@ def test_normalize_uses_url_as_title_when_no_title(
         adapter_with_key,
         metadata={"sourceURL": SAMPLE_URL, "statusCode": 200},
     )
-    advisories = adapter_with_key.normalize(document, now=NOW)  # type: ignore[arg-type]
+    advisories = adapter_with_key.normalize(document, now=NOW)
 
     assert advisories[0].title == SAMPLE_URL
 
@@ -115,7 +113,7 @@ def test_normalize_truncates_long_markdown(adapter_with_key: FirecrawlSourceAdap
     long_md = "x" * 10_000
     adapter = FirecrawlSourceAdapter(api_key="fc-test", max_content_chars=100)
     document = _make_document(adapter, markdown=long_md)
-    advisories = adapter.normalize(document, now=NOW)  # type: ignore[arg-type]
+    advisories = adapter.normalize(document, now=NOW)
 
     assert len(advisories[0].summary) == 100
 
@@ -137,9 +135,10 @@ def _make_mock_result(
 
 def test_fetch_returns_source_document(adapter_with_key: FirecrawlSourceAdapter) -> None:
     mock_result = _make_mock_result()
+    mock_firecrawl = MagicMock()
+    mock_firecrawl.V1FirecrawlApp.return_value.scrape_url.return_value = mock_result
 
-    with patch("firecrawl.V1FirecrawlApp") as MockApp:
-        MockApp.return_value.scrape_url.return_value = mock_result
+    with patch.dict("sys.modules", {"firecrawl": mock_firecrawl}):
         query = SourceFetchQuery(url=SAMPLE_URL)
         documents = adapter_with_key.fetch(query, now=NOW)
 
@@ -157,7 +156,9 @@ def test_fetch_returns_empty_when_no_url(adapter_with_key: FirecrawlSourceAdapte
 
 
 def test_fetch_raises_on_api_error(adapter_with_key: FirecrawlSourceAdapter) -> None:
-    with patch("firecrawl.V1FirecrawlApp") as MockApp:
-        MockApp.return_value.scrape_url.side_effect = RuntimeError("API error")
+    mock_firecrawl = MagicMock()
+    mock_firecrawl.V1FirecrawlApp.return_value.scrape_url.side_effect = RuntimeError("API error")
+
+    with patch.dict("sys.modules", {"firecrawl": mock_firecrawl}):
         with pytest.raises(SourceAdapterError, match="scrape_url failed"):
             adapter_with_key.fetch(SourceFetchQuery(url=SAMPLE_URL), now=NOW)

@@ -22,7 +22,9 @@ from .errors import ConstraintViolationError
 
 # --- enum 型（Literal で表現） ---------------------------------------------
 
-SourceType = Literal["manual", "nvd", "myjvn", "kev", "vendor", "rss", "external_collector", "web_scrape"]
+SourceType = Literal[
+    "manual", "nvd", "myjvn", "kev", "vendor", "rss", "external_collector", "web_scrape"
+]
 
 Severity = Literal["critical", "high", "medium", "low", "unknown"]
 

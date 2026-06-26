@@ -20,7 +20,7 @@ CREATE TABLE source_records (
     source_record_id TEXT PRIMARY KEY,
     source_type      TEXT NOT NULL
         CHECK (source_type IN (
-            'manual', 'nvd', 'myjvn', 'kev', 'vendor', 'rss', 'external_collector'
+            'manual', 'nvd', 'myjvn', 'kev', 'vendor', 'rss', 'external_collector', 'web_scrape'
         )),
     source_name      TEXT NOT NULL,
     retrieved_at     TEXT NOT NULL,

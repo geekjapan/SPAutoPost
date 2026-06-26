@@ -7,7 +7,7 @@ Issue #34 の評価目的で作成。本番採用が確定した場合は別 Iss
 from __future__ import annotations
 
 import os
-from datetime import UTC, datetime
+from datetime import datetime
 from typing import TYPE_CHECKING
 
 from .source_adapters import (
@@ -18,15 +18,13 @@ from .source_adapters import (
     _hash_json,
     _utc_now,
 )
-from typing import cast
-
 from .storage.models import Advisory, SourceRecord, SourceType
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
 FIRECRAWL_SOURCE_NAME = "firecrawl"
-FIRECRAWL_SOURCE_TYPE = "web_scrape"
+FIRECRAWL_SOURCE_TYPE: SourceType = "web_scrape"
 FIRECRAWL_PARSER_VERSION = "firecrawl-spike-v1"
 
 _DEFAULT_MAX_CHARS = 5000
@@ -46,13 +44,17 @@ class FirecrawlSourceAdapter:
         max_content_chars: int | None = None,
         timeout_ms: int | None = None,
     ) -> None:
-        self._api_key = api_key or os.environ.get("FIRECRAWL_API_KEY") or ""
-        self._max_content_chars = max_content_chars or int(
-            os.environ.get("FIRECRAWL_MAX_CONTENT_CHARS", str(_DEFAULT_MAX_CHARS))
+        self._api_key = api_key if api_key is not None else os.environ.get("FIRECRAWL_API_KEY", "")
+        self._max_content_chars = (
+            max_content_chars
+            if max_content_chars is not None
+            else int(os.environ.get("FIRECRAWL_MAX_CONTENT_CHARS", str(_DEFAULT_MAX_CHARS)))
         )
-        self._timeout_ms = timeout_ms or int(
-            os.environ.get("FIRECRAWL_TIMEOUT_SECONDS", "30")
-        ) * 1000
+        self._timeout_ms = (
+            timeout_ms
+            if timeout_ms is not None
+            else int(os.environ.get("FIRECRAWL_TIMEOUT_SECONDS", "30")) * 1000
+        )
 
     def validate_config(self) -> AdapterStatus:
         if not self._api_key:
@@ -78,11 +80,12 @@ class FirecrawlSourceAdapter:
 
         app = V1FirecrawlApp(api_key=self._api_key)
         try:
-            result = app.scrape_url(
-                query.url, formats=["markdown"], timeout=self._timeout_ms
-            )
+            result = app.scrape_url(query.url, formats=["markdown"], timeout=self._timeout_ms)
         except Exception as exc:
             raise SourceAdapterError(f"Firecrawl scrape_url failed: {exc}") from exc
+
+        if result is None:
+            raise SourceAdapterError("Firecrawl scrape_url returned None")
 
         raw_payload: dict[str, object] = {
             "url": query.url,
@@ -94,7 +97,7 @@ class FirecrawlSourceAdapter:
         timestamp = _utc_now(now)
         source_record = SourceRecord(
             source_record_id=f"{FIRECRAWL_SOURCE_NAME}-{raw_hash[:12]}",
-            source_type=cast(SourceType, FIRECRAWL_SOURCE_TYPE),
+            source_type=FIRECRAWL_SOURCE_TYPE,
             source_name=FIRECRAWL_SOURCE_NAME,
             source_url=query.url,
             retrieved_at=timestamp,

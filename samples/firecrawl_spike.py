@@ -13,6 +13,7 @@ It scrapes the given URL, displays the result, and maps it to an Advisory.
 
 from __future__ import annotations
 
+import hashlib
 import os
 import sys
 from datetime import UTC, datetime
@@ -71,7 +72,9 @@ def main() -> None:
     now = datetime.now(UTC)
     summary = markdown[:MAX_CONTENT_CHARS].strip() or title
     advisory = {
-        "advisory_id": f"web-scrape-{abs(hash(source_url)) % 10**8:08d}",
+        "advisory_id": (
+            f"web-scrape-{int(hashlib.sha256(source_url.encode()).hexdigest(), 16) % 10**8:08d}"
+        ),
         "title": title,
         "summary": summary,
         "severity": "unknown",
