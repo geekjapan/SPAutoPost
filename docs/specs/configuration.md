@@ -56,12 +56,15 @@ llm:
   prompt_version: v1
 
 sharepoint:
-  mode: site-page
+  mode: site-page                           # "site-page" 固定（M1）
   default_draft: true
   allow_publish: false
   tenant_id: env:SPAUTOPOST_TENANT_ID
   site_id: env:SPAUTOPOST_SHAREPOINT_SITE_ID
   page_library_id: env:SPAUTOPOST_SHAREPOINT_PAGE_LIBRARY_ID
+  dedicated_site: true                      # 必須: 専用サイトのみ許可（M1）
+  news_promote: false                       # M1: News promote 未実装
+  idempotency_scope: site-and-page-library  # 必須
 
 sources:
   manual:
