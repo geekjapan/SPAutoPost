@@ -97,7 +97,7 @@ Microsoft Graph / SharePoint publish:
 ```bash
 git status --short
 git diff --check
-git grep -n -I -E 'BEGIN (RSA |EC |OPENSSH |PRIVATE )?KEY|access_token|refresh_token|client_secret|Authorization:|Cookie:' -- .
+git grep -n -I -E 'BEGIN [A-Z ]*PRIVATE KEY|access_token|refresh_token|client_secret|Authorization:|Cookie:' -- . ':!docs/' ':!*.md'
 ```
 
 利用可能な環境では、gitleaks などの secret scanner と dependency scanner も実行します。検出値が実 Secret の可能性を持つ場合は、値を貼らずに identifier / file / line / hash のみを記録し、revoke / rotate を先に行います。
@@ -115,9 +115,9 @@ git grep -n -I -E 'BEGIN (RSA |EC |OPENSSH |PRIVATE )?KEY|access_token|refresh_t
 ## LLM Provider Review
 
 - [ ] production provider と test provider が分離されている
-- [ ] provider terms / data retention / training use / region / SLA / rate limit を確認した
+- [ ] provider terms / data retention / training use / region / SLA / rate limit を確認している
 - [ ] LLM に渡す入力は公開 advisory と必要最小限の文体指示だけである
-- [ ] Secret、PII、内部ネットワーク、未公開インシデント、攻撃手順を送らない
+- [ ] Secret、PII、内部ネットワーク構成情報、未公開インシデント、攻撃手順を送らない
 - [ ] prompt_version と generation_input_hash を audit log で追跡できる
 - [ ] output validation と human review が publish 前に必ず入る
 - [ ] ChatGPT / Claude subscription UI の自動操作を使わない
@@ -132,6 +132,9 @@ pre-production dry-run で確認する項目:
 - [ ] retryable / failure_count / target が関連情報として残る
 - [ ] logs に Secret / token / cookie / authorization header / raw prompt が出ていない
 - [ ] scheduler の成功、失敗、停止が運用者に分かる
+- [ ] Log Analytics workspace と Container Apps / Jobs diagnostic settings が対象環境で有効である
+- [ ] `deploy/log-analytics.queries.kql` の correlation_id / error_code / publication result query が対象 workspace で実行できる
+- [ ] required alert rule と action group が Issue または decision record に記録されている
 
 ## Audit Log Review
 

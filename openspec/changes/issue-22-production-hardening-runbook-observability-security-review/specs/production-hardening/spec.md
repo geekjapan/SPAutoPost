@@ -29,11 +29,11 @@ The system SHALL document Microsoft Graph permission review and LLM provider dat
 - **THEN** the runbook requires review of least-privilege Graph permissions, production/development app separation, SharePoint target restriction, LLM input minimization, provider terms, and provider-specific rate limits
 
 ### Requirement: Observability and audit log review steps are documented
-The system SHALL document observability and audit log review steps for dry-run, generation, review, approval, publish, and error paths.
+The system SHALL document observability and audit log review steps for dry-run, generation, review, approval, publish, and error paths, including Azure Log Analytics workspace, diagnostic settings, query, and alert verification before production enablement.
 
 #### Scenario: Dry-run evidence is reviewed
 - **WHEN** an operator runs a pre-production dry-run
-- **THEN** the runbook requires correlation_id tracing, expected AuditEvent event types, error_code/retryable review, absence of secrets in logs, and preservation of issue or decision-record evidence
+- **THEN** the runbook requires correlation_id tracing, expected AuditEvent event types, error_code/retryable review, Log Analytics query and alert verification, absence of secrets in logs, and preservation of issue or decision-record evidence
 
 ### Requirement: Production security review checklist is documented
 The system SHALL provide a production security review checklist covering repository hygiene, configuration, secrets, Microsoft Graph, LLM provider use, publishing safety, audit log, observability, CI/CD, incident response, and accepted-risk recording.
