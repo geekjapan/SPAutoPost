@@ -15,6 +15,7 @@ Admin UI は M1 非対象（`docs/specs/deployment.md` の Non-Goals）。
 | `jobs.example.yaml` | Container Apps Jobs の command / schedule / secretRef 参照 skeleton |
 | `config.hosted.example.yml` | hosted 設定例（production / postgresql / `env:` 参照） |
 | `hosted.env.example` | hosted で必要な env / secret 参照例（placeholder のみ） |
+| `log-analytics.queries.kql` | Container Apps / Jobs logs、AuditEvent、redaction 確認用 KQL snippets |
 
 ## local 実行 vs Azure 想定実行
 
@@ -57,3 +58,17 @@ docker run --rm --env-file deploy/hosted.env.example spautopost-core dry-run
 > 注: `hosted.env.example` は placeholder のみ。実値は使わず、hosted では Container
 > Apps secret ref から注入する。`config/*.yml` と `data/` は `.dockerignore` で image
 > に入らない（実 Secret 混入防止）。
+
+## Log Analytics 確認（M6）
+
+Issue #30 / OpenSpec change `issue-30-add-azure-log-analytics-integration` では、
+本番 Azure resource の provision は行わず、確認手順と query を定義する。
+
+- Container Apps Environment の diagnostic settings で console logs / system logs を
+  Log Analytics workspace へ送る。
+- workspace ID、resource group、alert action group、dashboard は tenant 固有値のため
+  repository に保存しない。
+- `deploy/log-analytics.queries.kql` を使い、Container Apps / Jobs logs、`AuditEvent`
+  の `correlation_id`、`error_code`、publication result、Secret / token redaction を確認する。
+
+詳細手順は `docs/runbooks/log-analytics.md` を参照。

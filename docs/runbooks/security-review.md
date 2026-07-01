@@ -73,6 +73,15 @@ Draft
 - [ ] error_code が記録される
 - [ ] 監査ログの保存先と保持方針がある、または未決事項として Issue 化されている
 
+### Azure Log Analytics
+
+- [ ] Container Apps / Jobs の diagnostic settings が Log Analytics workspace に接続されている
+- [ ] `docs/runbooks/log-analytics.md` の console / system logs query で Admin API app と scheduled job を確認できる
+- [ ] `correlation_id` で AuditEvent を追跡できる
+- [ ] `error_code` / publication result を検索できる
+- [ ] redaction query で token / Secret / authorization header / cookie / private key が返らない
+- [ ] workspace ID、alert action group、dashboard ID など tenant 固有値を repository に保存していない
+
 ### CI/CD
 
 - [ ] secret scanning が有効

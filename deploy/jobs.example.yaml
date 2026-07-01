@@ -11,6 +11,8 @@
 #   args       : [ <job-name> ]  → mapped to a safe CLI command by the wrapper
 #   secrets    : injected as env vars via Container Apps secret refs
 #               (values come from Key Vault / Container Apps secrets, never here)
+#   logs       : Container Apps Environment diagnostic settings send console and
+#               system logs to Log Analytics; see log-analytics.queries.kql.
 
 image: <registry>/spautopost-core:<tag>
 
