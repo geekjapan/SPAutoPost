@@ -92,12 +92,13 @@ Microsoft Graph / SharePoint publish:
 - real `.env`
 - real tenant / app / site identifiers that are not approved for documentation
 
-最低限のローカル確認:
+最低限のローカル確認。`git grep` は追跡済みファイル、`git ls-files --others` は未追跡の生成物や一時ファイルを確認します:
 
 ```bash
 git status --short
 git diff --check
-git grep -n -I -E 'BEGIN [A-Z ]*PRIVATE KEY|access_token|refresh_token|client_secret|Authorization:|Cookie:' -- . ':!docs/' ':!*.md'
+git grep -n -I -E 'BEGIN [A-Z ]*PRIVATE KEY|Bearer [A-Za-z0-9._~+/-]+=*|api[_-]?key|access_token|refresh_token|client_secret|Authorization:|Cookie:' -- . ':!docs/' ':!*.md'
+git ls-files --others --exclude-standard | while read -r path; do grep -n -I -E 'BEGIN [A-Z ]*PRIVATE KEY|Bearer [A-Za-z0-9._~+/-]+=*|api[_-]?key|access_token|refresh_token|client_secret|Authorization:|Cookie:' "$path" || true; done
 ```
 
 利用可能な環境では、gitleaks などの secret scanner と dependency scanner も実行します。検出値が実 Secret の可能性を持つ場合は、値を貼らずに identifier / file / line / hash のみを記録し、revoke / rotate を先に行います。
@@ -171,13 +172,13 @@ pre-production dry-run で確認する項目:
 - [ ] repository に Secret / 実 `.env` / 不要生成物がない
 - [ ] config example は `env:` 参照または placeholder のみを使う
 - [ ] GitHub Actions permissions が最小化されている
-- [ ] dependency lockfile と known vulnerability を確認した
+- [ ] dependency lockfile、known vulnerability、supply-chain risk を確認した
 - [ ] Graph permission は最小権限で、投稿先が固定されている
 - [ ] LLM provider へ渡すデータと provider 契約条件を確認した
 - [ ] approved でない DraftPost は publish できない
 - [ ] retry で重複投稿しない
 - [ ] audit log と application log に Secret がない
-- [ ] incident response の emergency stop を実行できる
+- [ ] `docs/runbooks/incident-response.md` の emergency stop と初動記録を実行できる
 - [ ] accepted risk と remediation issue を記録した
 
 ## Review Output

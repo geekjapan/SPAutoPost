@@ -36,8 +36,8 @@ The system SHALL document observability and audit log review steps for dry-run, 
 - **THEN** the runbook requires correlation_id tracing, expected AuditEvent event types, error_code/retryable review, Log Analytics query and alert verification, absence of secrets in logs, and preservation of issue or decision-record evidence
 
 ### Requirement: Production security review checklist is documented
-The system SHALL provide a production security review checklist covering repository hygiene, configuration, secrets, Microsoft Graph, LLM provider use, publishing safety, audit log, observability, CI/CD, incident response, and accepted-risk recording.
+The system SHALL provide a production security review checklist covering repository hygiene, configuration, secrets, Microsoft Graph, LLM provider use, publishing safety, audit log, observability, CI/CD, dependency and supply-chain scanning, incident-response runbook readiness, and accepted-risk recording.
 
 #### Scenario: Security review produces an auditable result
 - **WHEN** production security review is completed
-- **THEN** the result records reviewer, date, scope, findings, risk level, remediation issues, accepted risk, and whether human approval is required before publishing is enabled
+- **THEN** the result records reviewer, date, scope including dependency and supply-chain review plus incident-response readiness, findings, risk level, remediation issues, accepted risk, and whether human approval is required before publishing is enabled
