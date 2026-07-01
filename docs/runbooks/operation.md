@@ -65,6 +65,7 @@ MVP では既定無効。明示承認後のみ許可する。
 - [ ] urgency が妥当
 - [ ] idempotency_key が既存 Publication と衝突していない、または update 意図が明確
 - [ ] SharePoint target が正しい
+- [ ] `docs/runbooks/production-hardening.md` の pre-production gate と security review が完了している
 
 ## Failure Response
 
@@ -101,6 +102,17 @@ MVP では既定無効。明示承認後のみ許可する。
 - retryable
 
 published の draft は原則 create 再実行しない。更新が必要な場合は update として扱う。
+
+## Retry / Backoff / Rate Limit Policy
+
+詳細な本番前確認は `docs/runbooks/production-hardening.md` を正本とします。運用時は次を守ります。
+
+- retry は bounded にする。
+- 429 / rate-limit header / `Retry-After` がある場合はそれを優先する。
+- timeout / transient network / 5xx は retryable として扱う。
+- authentication / authorization / validation / target-not-found は retry しない。
+- publish retry は idempotency_key、既存 Publication、SharePoint item/page ID を確認してから行う。
+- rate limit 回避や規約回避を目的に並列度を上げない。
 
 ## Stop Procedure
 

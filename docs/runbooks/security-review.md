@@ -24,6 +24,8 @@ Draft
 
 ## Checklist
 
+Issue #22 / M6 の本番前レビューでは、`docs/runbooks/production-hardening.md` の production security review checklist も併用します。
+
 ### Repository
 
 - [ ] Secret が commit されていない
@@ -31,6 +33,7 @@ Draft
 - [ ] sample config に実値が含まれていない
 - [ ] dependency lockfile が確認されている
 - [ ] 不要な生成物が commit されていない
+- [ ] generated artifact / CI log / audit log に Secret が出ていない
 
 ### Configuration
 
@@ -47,6 +50,7 @@ Draft
 - [ ] application / delegated permission の選定理由が記録されている
 - [ ] 本番 app と開発 app が分離されている
 - [ ] credential rotation 方針がある
+- [ ] rate limit / timeout / authorization failure の扱いが runbook に記録されている
 
 ### LLM Provider
 
@@ -56,6 +60,7 @@ Draft
 - [ ] prompt version が記録される
 - [ ] output validation が有効
 - [ ] ChatGPT / Claude subscription の UI 自動操作を実装していない
+- [ ] provider terms / data retention / region / SLA / rate limit を確認している
 
 ### Publishing Safety
 
@@ -71,6 +76,7 @@ Draft
 - [ ] correlation_id がある
 - [ ] Secret がログに出ていない
 - [ ] error_code が記録される
+- [ ] retryable / failure_count / target が失敗イベントから確認できる
 - [ ] 監査ログの保存先と保持方針がある、または未決事項として Issue 化されている
 
 ### CI/CD
@@ -98,3 +104,9 @@ Draft
 
 - #5 Define security, secrets, audit, and compliance baseline
 - #22 Production hardening runbook, observability, and security review
+
+## Related Runbooks
+
+- `docs/runbooks/production-hardening.md`
+- `docs/runbooks/operation.md`
+- `docs/runbooks/incident-response.md`
