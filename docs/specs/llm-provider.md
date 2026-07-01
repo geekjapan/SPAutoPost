@@ -53,7 +53,9 @@ provider_type の分類で混同しやすい用語を明確にします。
 4. rate limit・タイムアウト・エラーハンドリングを実装している
 5. 監査ログを取得または補完できる手段が確保されている
 
-承認状態は設定ファイルの `llm.production_approved: true` フラグで表現します。このフラグが `true` でない場合、起動時設定バリデーションが `production_api` / `production_flow` / `generic_api` の使用をブロックします。フラグの設定は情報セキュリティ部門の承認取得後に担当者が行い、その事実を Issue / ADR に記録します。
+承認状態は設定ファイルのフラグで表現します。共通フラグは `llm.production_approved: true` であり、このフラグが `true` でない場合、起動時設定バリデーションが `production_api` / `production_flow` / `generic_api` の使用をブロックします。
+
+`production_api`（Azure OpenAI / Foundry）は Azure 固有設定として `llm.azure.production_approved: true` も承認源として受け入れます。ただし、これは情報セキュリティ部門の承認取得を代替するものではなく、取得済み承認を設定で表現するためのフラグです。フラグの設定は情報セキュリティ部門の承認取得後に担当者が行い、その事実を Issue / ADR に記録します。
 
 ### production_flow
 
