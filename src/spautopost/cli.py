@@ -174,7 +174,7 @@ def _dispatch(args: argparse.Namespace, config: Config, dry_run: bool) -> int:
     if command == "publish-approved":
         return _run_publish_approved(config, dry_run)
     if command == "import-external":
-        return _run_import_external(args.input_file, config)
+        return _run_import_external(args.input_file, config, dry_run)
     print(f"unknown command: {command}", file=sys.stderr)  # pragma: no cover
     return EXIT_RUNTIME_ERROR  # pragma: no cover
 
@@ -698,7 +698,7 @@ def _run_publish_approved(config: Config, dry_run: bool) -> int:
         storage.close()
 
 
-def _run_import_external(input_file: Path, config: Config) -> int:
+def _run_import_external(input_file: Path, config: Config, dry_run: bool) -> int:
     """外部 collector の import ファイルを schema 検証して storage に保存する。"""
     from .external_collector_import import ExternalCollectorImportError, import_from_file
     from .storage.errors import StorageError
@@ -712,7 +712,7 @@ def _run_import_external(input_file: Path, config: Config) -> int:
 
     try:
         storage.migrate()
-        result = import_from_file(input_file, storage)
+        result = import_from_file(input_file, storage, dry_run=dry_run)
     except FileNotFoundError:
         print(f"import file not found: {input_file}", file=sys.stderr)
         return EXIT_RUNTIME_ERROR
@@ -728,7 +728,8 @@ def _run_import_external(input_file: Path, config: Config) -> int:
     finally:
         storage.close()
 
-    summary = {
+    summary: dict[str, object] = {
+        "dry_run": dry_run,
         "accepted_count": result.accepted_count,
         "rejected_count": result.rejected_count,
         "advisory_ids": [adv.advisory_id for adv in result.advisories],

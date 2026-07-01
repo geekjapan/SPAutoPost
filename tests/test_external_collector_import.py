@@ -242,3 +242,195 @@ def test_import_result_is_frozen() -> None:
     )
     with pytest.raises(AttributeError):
         result.accepted_count = 1  # type: ignore[misc]
+
+
+@pytest.mark.unit
+def test_unsupported_schema_version_raises(tmp_path: Path) -> None:
+    data = {**_VALID_PAYLOAD, "schema_version": "2.0"}
+    path = _make_json(tmp_path, data)
+    storage = _build_storage(tmp_path)
+    with pytest.raises(ExternalCollectorImportError, match="schema_version"):
+        import_from_file(path, storage, now=_NOW)  # type: ignore[arg-type]
+
+
+@pytest.mark.unit
+def test_cve_ids_as_string_instead_of_list_is_rejected(tmp_path: Path) -> None:
+    bad = {**_VALID_ADVISORY, "cve_ids": "CVE-2026-0001"}
+    data = {**_VALID_PAYLOAD, "advisories": [bad]}
+    path = _make_json(tmp_path, data)
+    storage = _build_storage(tmp_path)
+    result = import_from_file(path, storage, now=_NOW)  # type: ignore[arg-type]
+
+    assert result.rejected_count == 1
+    assert "配列" in result.rejected_records[0].reason
+
+
+@pytest.mark.unit
+def test_cve_ids_with_non_string_element_is_rejected(tmp_path: Path) -> None:
+    bad = {**_VALID_ADVISORY, "cve_ids": [123]}
+    data = {**_VALID_PAYLOAD, "advisories": [bad]}
+    path = _make_json(tmp_path, data)
+    storage = _build_storage(tmp_path)
+    result = import_from_file(path, storage, now=_NOW)  # type: ignore[arg-type]
+
+    assert result.rejected_count == 1
+    assert "文字列" in result.rejected_records[0].reason
+
+
+@pytest.mark.unit
+def test_vendor_advisory_ids_as_string_is_rejected(tmp_path: Path) -> None:
+    bad = {**_VALID_ADVISORY, "vendor_advisory_ids": "SA-001"}
+    data = {**_VALID_PAYLOAD, "advisories": [bad]}
+    path = _make_json(tmp_path, data)
+    storage = _build_storage(tmp_path)
+    result = import_from_file(path, storage, now=_NOW)  # type: ignore[arg-type]
+
+    assert result.rejected_count == 1
+    assert "配列" in result.rejected_records[0].reason
+
+
+@pytest.mark.unit
+def test_non_string_severity_is_rejected(tmp_path: Path) -> None:
+    """severity が文字列以外（リストなど）の場合、TypeError を起こさず reject される。"""
+    for bad_severity in [[], {}, 42]:
+        bad = {**_VALID_ADVISORY, "severity": bad_severity}
+        data = {**_VALID_PAYLOAD, "advisories": [bad]}
+        path = _make_json(tmp_path, data)
+        storage = _build_storage(tmp_path)
+        result = import_from_file(path, storage, now=_NOW)  # type: ignore[arg-type]
+        assert result.rejected_count == 1, f"expected reject for severity={bad_severity!r}"
+
+
+@pytest.mark.unit
+def test_advisory_id_is_scoped_to_producer(tmp_path: Path) -> None:
+    """異なる producer が同じ advisory_id を持つ場合、SPAutoPost ID が衝突しない。"""
+    payload_a = {
+        **_VALID_PAYLOAD,
+        "producer": "collector-a",
+        "advisories": [{**_VALID_ADVISORY, "advisory_id": "ADV-001"}],
+    }
+    payload_b = {
+        **_VALID_PAYLOAD,
+        "producer": "collector-b",
+        "advisories": [{**_VALID_ADVISORY, "advisory_id": "ADV-001"}],
+    }
+
+    path_a = _make_json(tmp_path, payload_a, "a.json")
+    path_b = _make_json(tmp_path, payload_b, "b.json")
+    storage = _build_storage(tmp_path)
+
+    result_a = import_from_file(path_a, storage, now=_NOW)  # type: ignore[arg-type]
+    result_b = import_from_file(path_b, storage, now=_NOW)  # type: ignore[arg-type]
+
+    id_a = result_a.advisories[0].advisory_id
+    id_b = result_b.advisories[0].advisory_id
+    assert id_a != id_b
+    assert "collector-a" in id_a
+    assert "collector-b" in id_b
+
+
+@pytest.mark.unit
+def test_advisory_id_no_collision_with_delimiter_ambiguity(tmp_path: Path) -> None:
+    """'-' 区切りが曖昧になるケース（"collector-a"+"ADV-001" vs "collector"+"a-ADV-001"）
+    でも advisory_id が衝突しない。"""
+    payload_a = {
+        **_VALID_PAYLOAD,
+        "producer": "collector-a",
+        "advisories": [{**_VALID_ADVISORY, "advisory_id": "ADV-001"}],
+    }
+    payload_b = {
+        **_VALID_PAYLOAD,
+        "producer": "collector",
+        "advisories": [{**_VALID_ADVISORY, "advisory_id": "a-ADV-001"}],
+    }
+
+    path_a = _make_json(tmp_path, payload_a, "da.json")
+    path_b = _make_json(tmp_path, payload_b, "db.json")
+    storage = _build_storage(tmp_path)
+
+    result_a = import_from_file(path_a, storage, now=_NOW)  # type: ignore[arg-type]
+    result_b = import_from_file(path_b, storage, now=_NOW)  # type: ignore[arg-type]
+
+    id_a = result_a.advisories[0].advisory_id
+    id_b = result_b.advisories[0].advisory_id
+    assert id_a != id_b
+
+
+@pytest.mark.unit
+def test_non_string_advisory_id_is_rejected(tmp_path: Path) -> None:
+    """advisory_id が存在するが文字列以外（数値など）の場合、reject される。"""
+    for bad_id in [123, 1.5, True, [], {}]:
+        bad = {**_VALID_ADVISORY, "advisory_id": bad_id}
+        data = {**_VALID_PAYLOAD, "advisories": [bad]}
+        path = _make_json(tmp_path, data)
+        storage = _build_storage(tmp_path)
+        result = import_from_file(path, storage, now=_NOW)  # type: ignore[arg-type]
+        assert result.rejected_count == 1, f"expected reject for advisory_id={bad_id!r}"
+        assert "文字列" in result.rejected_records[0].reason
+
+
+@pytest.mark.unit
+def test_duplicate_advisory_id_in_batch_is_rejected(tmp_path: Path) -> None:
+    """同一バッチ内で advisory_id が重複する場合、2 件目以降は reject される。"""
+    dup = {**_VALID_ADVISORY, "advisory_id": "ADV-001"}
+    data = {**_VALID_PAYLOAD, "advisories": [dup, dup]}
+    path = _make_json(tmp_path, data)
+    storage = _build_storage(tmp_path)
+
+    result = import_from_file(path, storage, now=_NOW)  # type: ignore[arg-type]
+
+    assert result.accepted_count == 1
+    assert result.rejected_count == 1
+    assert "重複" in result.rejected_records[0].reason
+
+
+@pytest.mark.unit
+def test_fallback_advisory_id_stable_across_ordering(tmp_path: Path) -> None:
+    """advisory_id 省略時、ファイル内の並び順が変わっても same advisory_id を得る。"""
+    adv_a = _VALID_ADVISORY
+    adv_b = {**_VALID_ADVISORY, "title": "Second Advisory", "cve_ids": ["CVE-2026-0002"]}
+
+    payload_ab = {**_VALID_PAYLOAD, "advisories": [adv_a, adv_b]}
+    payload_ba = {**_VALID_PAYLOAD, "advisories": [adv_b, adv_a]}
+
+    storage_ab = build_sqlite_storage(tmp_path / "ab.sqlite3")
+    storage_ab.migrate()
+    storage_ba = build_sqlite_storage(tmp_path / "ba.sqlite3")
+    storage_ba.migrate()
+
+    result_ab = import_from_file(_make_json(tmp_path, payload_ab, "ab.json"), storage_ab, now=_NOW)  # type: ignore[arg-type]
+    result_ba = import_from_file(_make_json(tmp_path, payload_ba, "ba.json"), storage_ba, now=_NOW)  # type: ignore[arg-type]
+
+    ids_ab = {a.advisory_id for a in result_ab.advisories}
+    ids_ba = {a.advisory_id for a in result_ba.advisories}
+    assert ids_ab == ids_ba
+
+
+@pytest.mark.unit
+def test_empty_advisories_still_writes_audit_event(tmp_path: Path) -> None:
+    """advisories が空配列でも source_fetch AuditEvent が記録される。"""
+    data = {**_VALID_PAYLOAD, "advisories": []}
+    path = _make_json(tmp_path, data)
+    storage = _build_storage(tmp_path)
+
+    result = import_from_file(path, storage, now=_NOW)  # type: ignore[arg-type]
+
+    assert result.accepted_count == 0
+    assert result.rejected_count == 0
+    events = storage.audit_events.list()  # type: ignore[union-attr]
+    assert len(events) == 1
+    assert events[0].event_type == "source_fetch"
+
+
+@pytest.mark.unit
+def test_correlation_id_from_payload_used_when_present(tmp_path: Path) -> None:
+    """payload に correlation_id がある場合、AuditEvent にそのまま使われる。"""
+    data = {**_VALID_PAYLOAD, "correlation_id": "trace-abc-123"}
+    path = _make_json(tmp_path, data)
+    storage = _build_storage(tmp_path)
+
+    import_from_file(path, storage, now=_NOW)  # type: ignore[arg-type]
+
+    events = storage.audit_events.list()  # type: ignore[union-attr]
+    assert len(events) == 1
+    assert events[0].correlation_id == "trace-abc-123"

@@ -73,7 +73,7 @@ class ExternalCollectorImportPort(Protocol):
     """
 
     def import_advisories(
-        self, storage: StoragePort, *, now: datetime | None = None
+        self, storage: StoragePort, *, now: datetime | None = None, dry_run: bool = False
     ) -> ImportResult: ...
 
 
@@ -87,12 +87,12 @@ class FileExternalCollectorImporter:
     path: Path
 
     def import_advisories(
-        self, storage: StoragePort, *, now: datetime | None = None
+        self, storage: StoragePort, *, now: datetime | None = None, dry_run: bool = False
     ) -> ImportResult:
         """ファイルを読み込み、schema 検証後に storage へ保存する。"""
         payload = _load_file(self.path)
         _validate_envelope(payload)
-        return _process_advisories(payload, storage, now=now)
+        return _process_advisories(payload, storage, now=now, dry_run=dry_run)
 
 
 def import_from_file(
@@ -100,9 +100,12 @@ def import_from_file(
     storage: StoragePort,
     *,
     now: datetime | None = None,
+    dry_run: bool = False,
 ) -> ImportResult:
     """convenience: ファイルを読み込んで storage へ保存する。"""
-    return FileExternalCollectorImporter(path=path).import_advisories(storage, now=now)
+    return FileExternalCollectorImporter(path=path).import_advisories(
+        storage, now=now, dry_run=dry_run
+    )
 
 
 # --- Schema validation ------------------------------------------------------
@@ -128,8 +131,13 @@ def _load_file(path: Path) -> Mapping[str, object]:
 def _validate_envelope(payload: Mapping[str, object]) -> None:
     """import ファイルのエンベロープ（必須フィールド）を検証する。"""
     issues: list[str] = []
-    if not _nonempty_str(payload.get("schema_version")):
+    schema_version = _nonempty_str(payload.get("schema_version"))
+    if not schema_version:
         issues.append("schema_version は必須です")
+    elif schema_version != IMPORT_SCHEMA_VERSION:
+        issues.append(
+            f"schema_version '{schema_version}' はサポート外です（対応: '{IMPORT_SCHEMA_VERSION}'）"
+        )
     if not _nonempty_str(payload.get("producer")):
         issues.append("producer は必須です")
     if not _nonempty_str(payload.get("generated_at")):
@@ -146,6 +154,9 @@ def _validate_envelope(payload: Mapping[str, object]) -> None:
 def _validate_advisory(raw: Mapping[str, object], index: int) -> list[str]:
     """advisory レコードの検証。issues が空なら有効。"""
     issues: list[str] = []
+    advisory_id = raw.get("advisory_id")
+    if advisory_id is not None and not isinstance(advisory_id, str):
+        issues.append(f"advisories[{index}].advisory_id は文字列である必要があります")
     if not _nonempty_str(raw.get("title")):
         issues.append(f"advisories[{index}].title は必須です")
     refs = raw.get("references")
@@ -161,19 +172,38 @@ def _validate_advisory(raw: Mapping[str, object], index: int) -> list[str]:
             if not _nonempty_str(ref.get("label")):
                 issues.append(f"advisories[{index}].references[{ri}].label は必須です")
             url = ref.get("url")
-            if not isinstance(url, str) or not _valid_url(url):
+            if not isinstance(url, str) or not _valid_url(url.strip()):
                 issues.append(
                     f"advisories[{index}].references[{ri}].url は http(s) URL である必要があります"
                 )
     severity = raw.get("severity")
-    if severity is not None and severity not in _SEVERITIES:
+    if severity is not None and (not isinstance(severity, str) or severity not in _SEVERITIES):
         issues.append(f"advisories[{index}].severity は無効な値です: {severity}")
-    for cve in _text_list(raw, "cve_ids"):
-        if not _CVE_RE.fullmatch(cve):
-            issues.append(f"advisories[{index}].cve_ids に無効な CVE ID が含まれています: {cve}")
-    for jvn in _text_list(raw, "jvn_ids"):
-        if not _JVN_RE.fullmatch(jvn):
-            issues.append(f"advisories[{index}].jvn_ids に無効な JVN ID が含まれています: {jvn}")
+    for key, pattern, name in [("cve_ids", _CVE_RE, "CVE ID"), ("jvn_ids", _JVN_RE, "JVN ID")]:
+        val = raw.get(key)
+        if val is not None:
+            if not isinstance(val, list):
+                issues.append(f"advisories[{index}].{key} は配列である必要があります")
+            else:
+                for i, item in enumerate(val):
+                    if not isinstance(item, str):
+                        issues.append(
+                            f"advisories[{index}].{key}[{i}] は文字列である必要があります"
+                        )
+                    elif not pattern.fullmatch(item.strip()):
+                        issues.append(
+                            f"advisories[{index}].{key} に無効な {name} が含まれています: {item}"
+                        )
+    vendor_ids = raw.get("vendor_advisory_ids")
+    if vendor_ids is not None:
+        if not isinstance(vendor_ids, list):
+            issues.append(f"advisories[{index}].vendor_advisory_ids は配列である必要があります")
+        else:
+            for i, item in enumerate(vendor_ids):
+                if not isinstance(item, str):
+                    issues.append(
+                        f"advisories[{index}].vendor_advisory_ids[{i}] は文字列である必要があります"
+                    )
     return issues
 
 
@@ -182,6 +212,7 @@ def _process_advisories(
     storage: StoragePort,
     *,
     now: datetime | None,
+    dry_run: bool = False,
 ) -> ImportResult:
     """advisory を変換し storage に保存する。"""
     timestamp = _utc_now(now)
@@ -190,7 +221,8 @@ def _process_advisories(
 
     accepted: list[tuple[SourceRecord, Advisory]] = []
     rejected: list[RejectedRecord] = []
-    correlation_id = uuid.uuid4().hex
+    correlation_id = _nonempty_str(payload.get("correlation_id")) or uuid.uuid4().hex
+    seen_advisory_ids: set[str] = set()
 
     for index, raw in enumerate(raw_list):
         if not isinstance(raw, dict):
@@ -204,28 +236,36 @@ def _process_advisories(
         if issues:
             rejected.append(RejectedRecord(index=index, reason="; ".join(issues), raw=raw))
             continue
-        pair = _to_storage_pair(raw, producer=producer, index=index, timestamp=timestamp)
+        pair = _to_storage_pair(raw, producer=producer, timestamp=timestamp)
+        adv_id = pair[1].advisory_id
+        if adv_id in seen_advisory_ids:
+            rejected.append(
+                RejectedRecord(
+                    index=index,
+                    reason=f"advisory_id '{adv_id}' がバッチ内で重複しています",
+                    raw=raw,
+                )
+            )
+            continue
+        seen_advisory_ids.add(adv_id)
         accepted.append(pair)
 
     source_records = [p[0] for p in accepted]
     advisories = [p[1] for p in accepted]
 
-    if accepted:
-        audit_events = [
-            _import_audit_event(
-                producer=producer,
-                accepted=len(accepted),
-                rejected=len(rejected),
-                correlation_id=correlation_id,
-                now=timestamp,
-            )
-        ]
+    if not dry_run:
+        audit_event = _import_audit_event(
+            producer=producer,
+            accepted=len(accepted),
+            rejected=len(rejected),
+            correlation_id=correlation_id,
+            now=timestamp,
+        )
         with storage.transaction():
             for sr, adv in accepted:
                 storage.source_records.upsert(sr)
                 storage.advisories.upsert(adv)
-            for event in audit_events:
-                storage.audit_events.append(event)
+            storage.audit_events.append(audit_event)
 
     return ImportResult(
         accepted_count=len(accepted),
@@ -240,13 +280,15 @@ def _to_storage_pair(
     raw: Mapping[str, object],
     *,
     producer: str,
-    index: int,
     timestamp: datetime,
 ) -> tuple[SourceRecord, Advisory]:
     """raw advisory dict を SourceRecord + Advisory に変換する。"""
     raw_hash = _hash_json(dict(raw))
     source_record_id = f"ext-{producer}-{raw_hash[:12]}"
-    advisory_id = _nonempty_str(raw.get("advisory_id")) or f"ext-{producer}-{index}-{raw_hash[:8]}"
+    raw_advisory_id = _nonempty_str(raw.get("advisory_id")) or raw_hash[:16]
+    # Hash the (producer, advisory_id) tuple to make the final ID unambiguous regardless
+    # of whether producer or advisory_id contain the '-' delimiter.
+    advisory_id_hash = _hash_json({"producer": producer, "advisory_id": raw_advisory_id})[:12]
     title = str(raw["title"]).strip()
     summary = _nonempty_str(raw.get("summary")) or title
     refs: list[Mapping[str, str]] = []
@@ -276,7 +318,7 @@ def _to_storage_pair(
         created_at=timestamp,
     )
     advisory = Advisory(
-        advisory_id=f"ext-{advisory_id}",
+        advisory_id=f"ext-{producer}-{advisory_id_hash}",
         title=title,
         summary=summary,
         source_record_id=source_record_id,

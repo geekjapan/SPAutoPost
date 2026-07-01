@@ -22,7 +22,7 @@ import sys
 from collections.abc import Sequence
 
 from .cli import main as cli_main
-from .scheduler import JobContext, build_job_context
+from .scheduler import build_job_context, current_job_context
 
 EXIT_UNKNOWN_JOB = 2
 
@@ -58,13 +58,12 @@ def run_job(job: str) -> int:
     except KeyError:
         _print_usage(f"unknown job: {job}")
         return EXIT_UNKNOWN_JOB
-    _context = build_job_context(job)  # noqa: F841 — available for audit logging
-    return cli_main(argv)
-
-
-def get_job_context(job: str) -> JobContext:
-    """Return the JobContext for a job name without executing it."""
-    return build_job_context(job)
+    context = build_job_context(job)
+    token = current_job_context.set(context)
+    try:
+        return cli_main(argv)
+    finally:
+        current_job_context.reset(token)
 
 
 def main(argv: Sequence[str] | None = None) -> int:
