@@ -304,10 +304,16 @@ def test_non_string_severity_is_rejected(tmp_path: Path) -> None:
 @pytest.mark.unit
 def test_advisory_id_is_scoped_to_producer(tmp_path: Path) -> None:
     """異なる producer が同じ advisory_id を持つ場合、SPAutoPost ID が衝突しない。"""
-    payload_a = {**_VALID_PAYLOAD, "producer": "collector-a",
-                 "advisories": [{**_VALID_ADVISORY, "advisory_id": "ADV-001"}]}
-    payload_b = {**_VALID_PAYLOAD, "producer": "collector-b",
-                 "advisories": [{**_VALID_ADVISORY, "advisory_id": "ADV-001"}]}
+    payload_a = {
+        **_VALID_PAYLOAD,
+        "producer": "collector-a",
+        "advisories": [{**_VALID_ADVISORY, "advisory_id": "ADV-001"}],
+    }
+    payload_b = {
+        **_VALID_PAYLOAD,
+        "producer": "collector-b",
+        "advisories": [{**_VALID_ADVISORY, "advisory_id": "ADV-001"}],
+    }
 
     path_a = _make_json(tmp_path, payload_a, "a.json")
     path_b = _make_json(tmp_path, payload_b, "b.json")
@@ -327,10 +333,16 @@ def test_advisory_id_is_scoped_to_producer(tmp_path: Path) -> None:
 def test_advisory_id_no_collision_with_delimiter_ambiguity(tmp_path: Path) -> None:
     """'-' 区切りが曖昧になるケース（"collector-a"+"ADV-001" vs "collector"+"a-ADV-001"）
     でも advisory_id が衝突しない。"""
-    payload_a = {**_VALID_PAYLOAD, "producer": "collector-a",
-                 "advisories": [{**_VALID_ADVISORY, "advisory_id": "ADV-001"}]}
-    payload_b = {**_VALID_PAYLOAD, "producer": "collector",
-                 "advisories": [{**_VALID_ADVISORY, "advisory_id": "a-ADV-001"}]}
+    payload_a = {
+        **_VALID_PAYLOAD,
+        "producer": "collector-a",
+        "advisories": [{**_VALID_ADVISORY, "advisory_id": "ADV-001"}],
+    }
+    payload_b = {
+        **_VALID_PAYLOAD,
+        "producer": "collector",
+        "advisories": [{**_VALID_ADVISORY, "advisory_id": "a-ADV-001"}],
+    }
 
     path_a = _make_json(tmp_path, payload_a, "da.json")
     path_b = _make_json(tmp_path, payload_b, "db.json")

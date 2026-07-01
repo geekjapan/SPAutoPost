@@ -27,9 +27,7 @@ class JobContext:
     run_mode: RunMode
 
 
-current_job_context: ContextVar[JobContext | None] = ContextVar(
-    "current_job_context", default=None
-)
+current_job_context: ContextVar[JobContext | None] = ContextVar("current_job_context", default=None)
 """現在のジョブ実行コンテキスト（ContextVar）。
 
 `job_entrypoint.run_job()` が設定する。監査ログや下流処理から RunMode を参照できる。

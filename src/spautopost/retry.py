@@ -55,3 +55,5 @@ def with_retry[T](fn: Callable[[], T], config: RetryConfig | None = None) -> T:
                 delay = min(delay * cfg.backoff_factor, cfg.max_delay_seconds)
             else:
                 raise
+
+    raise AssertionError("unreachable")

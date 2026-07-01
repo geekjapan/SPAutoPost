@@ -187,7 +187,9 @@ def _validate_advisory(raw: Mapping[str, object], index: int) -> list[str]:
             else:
                 for i, item in enumerate(val):
                     if not isinstance(item, str):
-                        issues.append(f"advisories[{index}].{key}[{i}] は文字列である必要があります")
+                        issues.append(
+                            f"advisories[{index}].{key}[{i}] は文字列である必要があります"
+                        )
                     elif not pattern.fullmatch(item.strip()):
                         issues.append(
                             f"advisories[{index}].{key} に無効な {name} が含まれています: {item}"
