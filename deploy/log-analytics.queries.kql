@@ -1,0 +1,91 @@
+// SPAutoPost Log Analytics query snippets.
+// Replace placeholders such as <correlation_id> and <job-or-app-name-prefix>.
+// These snippets assume Container Apps diagnostic settings send console logs to
+// Log Analytics and AuditEvent entries are emitted as JSON log lines.
+
+// 1. Confirm recent Container Apps / Jobs console logs.
+ContainerAppConsoleLogs_CL
+| where TimeGenerated > ago(24h)
+| extend app = tostring(column_ifexists("ContainerAppName_s", "")),
+         job = tostring(column_ifexists("JobName_s", "")),
+         revision = tostring(column_ifexists("RevisionName_s", "")),
+         message = tostring(column_ifexists("Log_s", ""))
+| where app startswith "spautopost" or job startswith "spautopost"
+| project TimeGenerated, app, job, revision, message
+| order by TimeGenerated desc
+| take 100
+
+// 2. Confirm Container Apps system logs for restarts, revisions, and job lifecycle.
+ContainerAppSystemLogs_CL
+| where TimeGenerated > ago(24h)
+| extend app = tostring(column_ifexists("ContainerAppName_s", "")),
+         job = tostring(column_ifexists("JobName_s", "")),
+         reason = tostring(column_ifexists("Reason_s", "")),
+         message = tostring(column_ifexists("Log_s", ""))
+| where app startswith "spautopost" or job startswith "spautopost"
+| project TimeGenerated, app, job, reason, message
+| order by TimeGenerated desc
+| take 100
+
+// 3. Trace AuditEvent entries by correlation_id.
+let correlationId = "<correlation_id>";
+ContainerAppConsoleLogs_CL
+| where TimeGenerated > ago(7d)
+| extend message = tostring(column_ifexists("Log_s", ""))
+| where message has "audit_event_id" and message has correlationId
+| extend audit = parse_json(extract(@"\{.*\}", 0, message))
+| project TimeGenerated,
+          correlation_id = tostring(audit.correlation_id),
+          event_type = tostring(audit.event_type),
+          result = tostring(audit.result),
+          error_code = tostring(audit.error_code),
+          operation = tostring(audit.operation),
+          publication_id = tostring(audit.publication_id),
+          draft_id = tostring(audit.draft_id),
+          idempotency_key = tostring(audit.idempotency_key)
+| order by TimeGenerated asc
+
+// 4. Search error_code values across AuditEvent log lines.
+let errorCode = "<error_code>";
+ContainerAppConsoleLogs_CL
+| where TimeGenerated > ago(7d)
+| extend message = tostring(column_ifexists("Log_s", ""))
+| where message has "audit_event_id" and message has "error_code"
+| extend audit = parse_json(extract(@"\{.*\}", 0, message))
+| where tostring(audit.error_code) == errorCode
+| project TimeGenerated,
+          correlation_id = tostring(audit.correlation_id),
+          event_type = tostring(audit.event_type),
+          result = tostring(audit.result),
+          error_code = tostring(audit.error_code),
+          error_message = tostring(audit.error_message),
+          operation = tostring(audit.operation)
+| order by TimeGenerated desc
+
+// 5. Search publication result events.
+ContainerAppConsoleLogs_CL
+| where TimeGenerated > ago(7d)
+| extend message = tostring(column_ifexists("Log_s", ""))
+| where message has "audit_event_id" and message has_any ("publish_result", "publish_create", "publish_update", "publish_dry_run")
+| extend audit = parse_json(extract(@"\{.*\}", 0, message))
+| project TimeGenerated,
+          correlation_id = tostring(audit.correlation_id),
+          event_type = tostring(audit.event_type),
+          result = tostring(audit.result),
+          error_code = tostring(audit.error_code),
+          operation = tostring(audit.operation),
+          publication_id = tostring(audit.publication_id),
+          sharepoint_page_id = tostring(audit.sharepoint_page_id),
+          idempotency_key = tostring(audit.idempotency_key)
+| order by TimeGenerated desc
+
+// 6. Redaction / no-token confirmation.
+ContainerAppConsoleLogs_CL
+| where TimeGenerated > ago(7d)
+| extend message = tostring(column_ifexists("Log_s", ""))
+| where message matches regex @"(?i)(access[_-]?token|refresh[_-]?token|client[_-]?secret|authorization:\s*bearer|cookie:|private key|x-ms-client-principal|api[_-]?key)"
+| project TimeGenerated,
+          app = tostring(column_ifexists("ContainerAppName_s", "")),
+          job = tostring(column_ifexists("JobName_s", "")),
+          message
+| order by TimeGenerated desc
